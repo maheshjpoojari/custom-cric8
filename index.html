@@ -2110,7 +2110,7 @@
                 totalOvers: totalOvers,
                 playersPerTeam: playersPerTeam,
                 inn: 1,
-                powerplay_active: false,
+                powerplay_active: (rulesFormat === 'pairs' || rulesFormat === 'pairs_practice'),
                 tossWinner: (tossWinnerTeam === t1) ? 'tA' : 'tB',
                 tossDecision: decision,
                 crr_bat_name: sName,
@@ -2343,7 +2343,14 @@
                 var isWithinOvers1To7 = (completedOvers < (totalOvers - 1));
                 var canTogglePP = isPairs && isBeforeOverStart && isWithinOvers1To7 && !isOverComplete;
 
-                if (canTogglePP) {
+                var isMandatoryNow = isPairs && d.inn === 1 && completedOvers === 0 && isBeforeOverStart;
+                if (isMandatoryNow) {
+                    ppBtn.disabled = true;
+                    ppBtn.classList.add('btn-disabled');
+                    ppBtn.style.opacity = "1";
+                    ppBtn.style.background = "var(--green)";
+                    ppBtn.innerText = "⚡ PP: MANDATORY";
+                } else if (canTogglePP) {
                     ppBtn.disabled = false;
                     ppBtn.classList.remove('btn-disabled');
                     ppBtn.style.opacity = "1";
@@ -3402,7 +3409,11 @@
             var totalOvers = parseInt(d.totalOvers) || 8;
 
             if (completedOvers >= (totalOvers - 1)) {
-                return alert("⚠️ Powerplay can only be activated for Overs 1 to " + (totalOvers - 1) + " (not allowed in the final over).");
+                return alert("⚠️ Power Play is not allowed in Over " + totalOvers + " (the final over) of any innings.");
+            }
+
+            if ((d.inn || 1) === 1 && completedOvers === 0) {
+                return alert("⚠️ Power Play is mandatory in Over 1 of Innings 1 and cannot be changed.");
             }
 
             if (d.curr_over && d.curr_over.length > 0) {
