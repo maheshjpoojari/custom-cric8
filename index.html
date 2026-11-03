@@ -1084,6 +1084,15 @@
                 </select>
             </div>
 
+            <div class="input-group">
+                <label>Delivery Type</label>
+                <select id="wickExtraType" class="input-field">
+                    <option value="none">Normal Delivery</option>
+                    <option value="wide">Wide + Out</option>
+                    <option value="noball">No-Ball + Out</option>
+                </select>
+            </div>
+
             <div class="input-group hidden" id="catcherGroup">
                 <label id="fielderSelectLabel">Select Fielder (Caught / Run Out)</label>
                 <select id="wickCatcher" class="input-field" onchange="window.handleInlineAddPlayer(this, 'bowl')"></select>
@@ -1166,6 +1175,7 @@
                 <select id="inn2BowlerSelect" class="input-field"></select>
             </div>
 
+            <button class="btn btn-purple btn-block" onclick="window.openImpactPlayerModal()">⚡ IMPACT PLAYER (OPTIONAL)</button>
             <button class="btn btn-green btn-block" onclick="window.confirmStartInnings2()">🚀 START INNINGS 2</button>
         </div>
     </div>
@@ -2163,10 +2173,11 @@
         function isCurrentOverComplete(currOverArray, isPairs, completedOvers, totalOvers) {
             if (!Array.isArray(currOverArray) || currOverArray.length === 0) return false;
             var isFinalOver = (completedOvers >= ((totalOvers || 8) - 1));
+            var counted = currOverArray.filter(function(b) { return String(b).indexOf('OT:') !== 0; });
             if (isPairs && !isFinalOver) {
-                return currOverArray.length >= 6;
+                return counted.length >= 6;
             }
-            var legalCount = currOverArray.filter(function(b) {
+            var legalCount = counted.filter(function(b) {
                 var s = String(b);
                 return !s.startsWith('Wd') && !s.startsWith('N');
             }).length;
@@ -2361,7 +2372,7 @@
                     impactBtn.classList.remove('hidden');
                     var isOver7Completed = (d.inn === 1) && (completedOvers === (totalOvers - 1));
                     var hasOver8StartedBall1 = isOver7Completed && !isOverComplete && (d.curr_over && d.curr_over.length > 0);
-                    var isImpactWindowOpen = isOver7Completed && !hasOver8StartedBall1;
+                    var isImpactWindowOpen = false; // impact is opened from the Innings Break screen only
                     var bothUsed = d.impactUsed && d.impactUsed.tA && d.impactUsed.tB;
 
                     if (isImpactWindowOpen && !bothUsed) {
@@ -2635,6 +2646,7 @@
 
             setText('wickModalTitle', isPairs ? "RECORD DISMISSAL (-5 RUNS)" : "RECORD WICKET / OUT");
             document.getElementById('wickType').value = 'Bowled';
+            document.getElementById('wickExtraType').value = 'none';
             window.onWickTypeChange();
             document.getElementById('wickModal').classList.remove('hidden');
         };
@@ -2713,21 +2725,39 @@
                     d[scKey].bowlers[currentBowler] = { balls: 0, runs: 0, maidens: 0, wkts: 0 };
                 }
 
+                var extraType = (document.getElementById('wickExtraType') || {}).value || 'none';
+                var isExtraOut = extraType === 'wide' || extraType === 'noball';
+                var baseExtraOut = isPairs ? 2 : 1;
+                // Custom Cric-8 Pairs: wide/no-ball dismissal counts as a legal ball.
+                // Pairs Practice: it is an extra ball on top (not counted to the over).
+                var countsAsLegal = isExtraOut ? (d.rulesFormat === 'pairs') : true;
+                var batterFacesBall = extraType !== 'wide';
+
                 d[teamKey].wkts = (parseInt(d[teamKey].wkts) || 0) + 1;
-                d[teamKey].balls = (parseInt(d[teamKey].balls) || 0) + 1;
+                if (countsAsLegal) d[teamKey].balls = (parseInt(d[teamKey].balls) || 0) + 1;
                 d.consecutive_dots = 0;
 
-                if (!Array.isArray(d.curr_over)) d.curr_over = [];
-                d.curr_over.push('W');
+                if (isExtraOut) {
+                    d[teamKey].score = (parseInt(d[teamKey].score) || 0) + baseExtraOut;
+                    d[scKey].extras = (parseInt(d[scKey].extras) || 0) + baseExtraOut;
+                    d[scKey].bowlers[currentBowler].runs = (parseInt(d[scKey].bowlers[currentBowler].runs) || 0) + baseExtraOut;
+                }
 
-                d[scKey].bowlers[currentBowler].balls += 1;
-                d[scKey].batters[dismissedName].balls += 1;
+                if (!Array.isArray(d.curr_over)) d.curr_over = [];
+                var outTag = extraType === 'wide' ? 'Wd-W' : (extraType === 'noball' ? 'N-W' : 'W');
+                if (isExtraOut && !countsAsLegal) outTag = 'OT:' + outTag;
+                d.curr_over.push(outTag);
+
+                if (countsAsLegal) d[scKey].bowlers[currentBowler].balls += 1;
+                if (batterFacesBall) d[scKey].batters[dismissedName].balls += 1;
                 d[scKey].batters[dismissedName].dismissals += 1;
 
-                if (dismissedRole === 'striker') {
-                    d.crr_bat_balls = (parseInt(d.crr_bat_balls) || 0) + 1;
-                } else {
-                    d.non_bat_balls = (parseInt(d.non_bat_balls) || 0) + 1;
+                if (batterFacesBall) {
+                    if (dismissedRole === 'striker') {
+                        d.crr_bat_balls = (parseInt(d.crr_bat_balls) || 0) + 1;
+                    } else {
+                        d.non_bat_balls = (parseInt(d.non_bat_balls) || 0) + 1;
+                    }
                 }
 
                 if (wType !== 'Run Out') {
@@ -3226,8 +3256,8 @@
             var isOverDone = isCurrentOverComplete(d.curr_over, isPairsFormat(d), activeOverIndex, totalOvers);
             var hasOver8StartedBall1 = (completedOvers === (totalOvers - 1)) && !isOverDone && (d.curr_over && d.curr_over.length > 0);
 
-            if (d.inn !== 1 || completedOvers !== (totalOvers - 1) || hasOver8StartedBall1) {
-                return alert("⚠️ Impact Player can only be declared after Over " + (totalOvers - 1) + " finishes and before the 1st ball of Over " + totalOvers + " is bowled.");
+            if (d.inn !== 1 || document.getElementById('inningsBreakModal').classList.contains('hidden')) {
+                return alert("⚠️ Impact Player can only be declared after Innings 1 ends and before Innings 2 starts.");
             }
 
             var tSel = document.getElementById('impactTeamSelect');
@@ -3317,6 +3347,11 @@
 
             window.closeModal('impactModal');
             syncMatchState(d);
+            if (!document.getElementById('inningsBreakModal').classList.contains('hidden')) {
+                var brk1 = ((d.tossWinner === 'tA') ? (d.tossDecision === 'bat') : (d.tossDecision === 'bowl')) ? 'tA' : 'tB';
+                var brk2 = brk1 === 'tA' ? 'tB' : 'tA';
+                window.openInningsBreakModal(d, brk1, brk2);
+            }
             alert("⚡ Impact Substitution Confirmed: " + inPlayer + " replaces " + outPlayer + "!");
         };
 
@@ -3375,6 +3410,7 @@
             }
 
             d.powerplay_active = !d.powerplay_active;
+            if (d.powerplay_active) alert("Power Play 2 Fielders On Boundary");
             syncMatchState(d);
         };
 
