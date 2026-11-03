@@ -633,7 +633,7 @@
 </head>
 <body>
 
-    <!-- SINGLE TOP STATUS BAR (PITCH TAG REMOVED; SHARE BUTTON HIDDEN FOR SPECTATORS) -->
+    <!-- SINGLE TOP STATUS BAR -->
     <div class="top-bar">
         <span id="roleIndicator">MATCH HOST / SCORER</span>
         <div style="display:flex; gap:6px; align-items:center;">
@@ -648,7 +648,6 @@
         <div class="view-card">
             <h2 class="view-title">🏏 CRIC-8 ARENA CONSOLE</h2>
 
-            <!-- SINGLE LIVE MATCHES HUB BUTTON -->
             <button class="btn btn-red btn-block" onclick="window.openLiveHubView()">🔴 LIVE MATCHES (GROUND QR HUB)</button>
             <button class="btn btn-blue btn-block" onclick="window.startHostFlow()">⚡ SCORE A QUICK MATCH</button>
             <button class="btn btn-green btn-block" onclick="window.resumeLiveMatchOnSlot()">▶️ RESUME LIVE MATCH</button>
@@ -671,6 +670,7 @@
                 <label>Filter by Tournament / Series</label>
                 <select id="hubTourneyFilter" class="input-field" onchange="window.renderLiveHubCards()">
                     <option value="all">All Ongoing Matches</option>
+                    <option value="icl_2026">flydubai’s - Inter-department Cricket League (ICL)</option>
                     <option value="corporate">Corporate Cric-8 Cup</option>
                     <option value="premier">Weekend Premier League</option>
                     <option value="friendly">Friendly / Exhibition</option>
@@ -681,7 +681,6 @@
                 <div style="text-align:center; padding:24px; color:#64748b;">Loading live matches...</div>
             </div>
 
-            <!-- HIDDEN AUTOMATICALLY WHEN OPENED VIA SHARED / QR LINK -->
             <button id="hubBackToHomeBtn" class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -714,15 +713,17 @@
             <h2 class="view-title">📅 SCHEDULED FIXTURES HUB</h2>
             <div class="input-group">
                 <label>Filter by Tournament</label>
-              <select id="fixtureTourneyFilter" class="input-field" onchange="window.renderScheduledFixtures()">
-    <option value="icl_2026" selected>flydubai’s - Inter-department Cricket League (ICL)</option>
-    <option value="all">All Tournaments</option>
-    <option value="corporate">Corporate Cric-8 Cup</option>
-    <option value="premier">Weekend Premier League</option>
-    <option value="friendly">Friendly / Practice Series</option>
-</select>
+                <select id="fixtureTourneyFilter" class="input-field" onchange="window.renderScheduledFixtures()">
+                    <option value="icl_2026" selected>flydubai’s - Inter-department Cricket League (ICL)</option>
+                    <option value="all">All Tournaments</option>
+                    <option value="corporate">Corporate Cric-8 Cup</option>
+                    <option value="premier">Weekend Premier League</option>
+                    <option value="friendly">Friendly / Practice Series</option>
+                </select>
             </div>
-<button id="syncIclBtn" class="btn btn-gold btn-block" onclick="window.syncOfficialIclToFirebase()">☁️ SYNC ICL 2026 TEAMS & 26 FIXTURES TO FIREBASE</button>
+
+            <button id="syncIclBtn" class="btn btn-gold btn-block" onclick="window.syncOfficialIclToFirebase()">☁️ SYNC ICL 2026 TEAMS & 26 FIXTURES TO FIREBASE</button>
+
             <div id="fixturesListContainer"></div>
 
             <div style="border-top:1px solid #1e293b; padding-top:12px; margin-top:12px;">
@@ -1240,7 +1241,7 @@
         var db = firebase.firestore();
         var auth = firebase.auth();
 
-// --- 2. OFFICIAL FLYDUBAI ICL 2026 MASTER ROSTERS (14 TEAMS, 188 PLAYERS) ---
+        // --- 2. OFFICIAL FLYDUBAI ICL 2026 MASTER ROSTERS (14 TEAMS, 188 PLAYERS) ---
         var DEFAULT_TEAMS = {
             "Titans": [
                 "Adnan (C)", "Nabeel", "Sayed", "Mushin", "Nishad", "Rojin", "Safir",
@@ -1342,12 +1343,6 @@
         var uploadedImpactSubs = {};
         var scheduledFixturesList = JSON.parse(JSON.stringify(DEFAULT_ICL_FIXTURES));
         var archivedMatchesCache = [];
-
-        var uploadedTeams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
-        var selectedSquadsByTeam = {};
-        var uploadedImpactSubs = {};
-        var scheduledFixturesList = [];
-        var archivedMatchesCache = [];
         var liveHubPitchCache = {};
         var liveHubUnsubscribers = [];
 
@@ -1413,14 +1408,12 @@
                 if (specBackHubBtn) specBackHubBtn.classList.add('hidden');
             }
 
-            // If user opened via shared QR link, NEVER let them see Back to Home
             if (hubBackBtn) {
                 hubBackBtn.classList.toggle('hidden', isSpectatorLockMode);
             }
         }
 
         window.navigateView = function(viewId, skipPushState) {
-            // STRICT GUARD: Spectators on shared QR link can ONLY access viewLiveHub or viewScorer
             if (isSpectatorLockMode && viewId !== 'viewLiveHub' && viewId !== 'viewScorer') {
                 viewId = 'viewLiveHub';
             }
@@ -1460,6 +1453,7 @@
         }
 
         function getTournamentDisplayName(code) {
+            if (code === 'icl_2026') return "FLYDUBAI’S - INTER-DEPARTMENT CRICKET LEAGUE (ICL)";
             if (code === 'corporate') return 'CORPORATE CRIC-8 CUP';
             if (code === 'premier') return 'WEEKEND PREMIER LEAGUE';
             if (code === 'friendly') return 'FRIENDLY / EXHIBITION SERIES';
@@ -1592,12 +1586,11 @@
             });
         };
 
-        // --- REAL-TIME MULTI-MATCH LIVE HUB (HIDES ABORTED / UNSTARTED PITCHES & PITCH LABELS) ---
+        // --- REAL-TIME MULTI-MATCH LIVE HUB ---
         window.openLiveHubView = function() {
             window.navigateView('viewLiveHub', true);
             var pitches = ['pitch_1', 'pitch_2', 'pitch_3', 'pitch_4'];
 
-            // Clear old hub listeners and attach real-time listeners to all 4 slots
             liveHubUnsubscribers.forEach(function(unsub) { try { unsub(); } catch (e) {} });
             liveHubUnsubscribers = [];
 
@@ -1629,12 +1622,10 @@
                 var d = liveHubPitchCache[pId];
                 if (!d) return;
 
-                // STRICT FILTER: Ignore Aborted / Reset / Unstarted placeholders!
                 var isLive = (d.match_in_progress === true && d.match_status === 'in_progress');
                 var isCompleted = (d.match_status === 'completed');
                 if (!isLive && !isCompleted) return;
 
-                // Also ignore placeholder "Team 1 vs Team 2" with 0 balls if never started
                 var tAName = d.tA ? d.tA.name : "";
                 var tBName = d.tB ? d.tB.name : "";
                 if (!tAName || !tBName) return;
@@ -2065,7 +2056,7 @@
         window.startMatch = function() {
             var t1 = document.getElementById('selectTeam1').value;
             var t2 = document.getElementById('selectTeam2').value;
-            var tournament = document.getElementById('selectTournament').value || "corporate";
+            var tournament = document.getElementById('selectTournament').value || "icl_2026";
             var rulesFormat = document.getElementById('rulesFormatSelect').value || "pairs";
             var totalOvers = parseInt(document.getElementById('matchOversInput').value) || 8;
             var playersPerTeam = parseInt(document.getElementById('playersPerTeamInput').value) || 8;
@@ -2323,7 +2314,7 @@
                 }
             }
 
-            // --- 1. STRICT POWERPLAY BUTTON LIFECYCLE (ONLY BEFORE BALL 1 OF OVERS 1 TO 7) ---
+            // --- 1. STRICT POWERPLAY BUTTON LIFECYCLE ---
             var ppBtn = document.getElementById('ppToggleBtn');
             if (ppBtn) {
                 var isBeforeOverStart = (!d.curr_over || d.curr_over.length === 0);
@@ -2345,7 +2336,7 @@
                 }
             }
 
-            // --- 2. STRICT IMPACT PLAYER BUTTON LIFECYCLE (AFTER OVER 7 FINISHES UNTIL BALL 1 OF OVER 8) ---
+            // --- 2. STRICT IMPACT PLAYER BUTTON LIFECYCLE ---
             var impactBtn = document.getElementById('impactPlayerBtn');
             if (impactBtn) {
                 var reqCount = parseInt(d.playersPerTeam) || 8;
@@ -3550,92 +3541,123 @@
                         tHtml += '<div style="display:flex; justify-content:space-between; font-size:0.75rem; padding:3px 0; border-bottom:1px solid #1e293b;">' +
                             '<span><b style="color:var(--gold);">' + ballLabel + '</b> ' + (b.striker || b.batter || '') + '</span>' +
                             '<span style="color:var(--blue); font-weight:800;">' + rightText + '</span></div>';
-                        });
-                        tHtml += '</div>';
-                    }
-                    container.innerHTML = tHtml;
-                    return;
+                    });
+                    tHtml += '</div>';
                 }
-    
-                var sc = (tabNum === 1) ? d.inn1_scorecard : d.inn2_scorecard;
-                if (!sc) {
-                    container.innerHTML = '<div style="text-align:center; padding:18px; color:#64748b;">No scorecard data recorded for this innings.</div>';
-                    return;
-                }
-    
-                var rebatList = Array.isArray(sc.rebat_players) ? sc.rebat_players : [];
-                var doubleOverList = Array.isArray(sc.double_over_bowlers) ? sc.double_over_bowlers : [];
-                var ipMap = d.impactPlayers || {};
-                var isPairs = isPairsFormat(d);
-    
-                var html = '<div style="font-size:0.84rem; color:var(--gold); font-weight:800; margin-bottom:6px;">' +
-                    'Total: ' + (sc.totalScore || 0) + '/' + (sc.totalWkts || 0) +
-                    ' (' + Math.floor((sc.totalBalls || 0) / 6) + '.' + ((sc.totalBalls || 0) % 6) + ' Ov) | Extras: ' + (sc.extras || 0) +
+                container.innerHTML = tHtml;
+                return;
+            }
+
+            var sc = (tabNum === 1) ? d.inn1_scorecard : d.inn2_scorecard;
+            if (!sc) {
+                container.innerHTML = '<div style="text-align:center; padding:18px; color:#64748b;">No scorecard data recorded for this innings.</div>';
+                return;
+            }
+
+            var rebatList = Array.isArray(sc.rebat_players) ? sc.rebat_players : [];
+            var doubleOverList = Array.isArray(sc.double_over_bowlers) ? sc.double_over_bowlers : [];
+            var ipMap = d.impactPlayers || {};
+            var isPairs = isPairsFormat(d);
+
+            var html = '<div style="font-size:0.84rem; color:var(--gold); font-weight:800; margin-bottom:6px;">' +
+                'Total: ' + (sc.totalScore || 0) + '/' + (sc.totalWkts || 0) +
+                ' (' + Math.floor((sc.totalBalls || 0) / 6) + '.' + ((sc.totalBalls || 0) % 6) + ' Ov) | Extras: ' + (sc.extras || 0) +
+                '</div>';
+
+            html += '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>';
+            for (var name in (sc.batters || {})) {
+                var st = sc.batters[name];
+                var sr = st.balls > 0 ? ((st.runs / st.balls) * 100).toFixed(1) : "0.0";
+                var isRebat = rebatList.includes(name) || (isPairs && st.balls > 8);
+                var badgeHtml = isRebat ? '<span class="repeat-badge">2x</span>' : '';
+                var ipHtml = ipMap[name] ? '<span class="ip-badge">⚡IP</span>' : '';
+                var rColor = st.runs < 0 ? 'style="color:var(--red); font-weight:800;"' : '';
+                html += '<tr><td><b>' + name + '</b>' + badgeHtml + ipHtml + '</td><td ' + rColor + '>' + st.runs + '</td><td>' + st.balls + '</td><td>' + st.fours + '</td><td>' + st.sixes + '</td><td>' + sr + '</td></tr>';
+            }
+            html += '</table>';
+
+            html += '<table class="sc-table" style="margin-top:12px;"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>';
+            for (var bName in (sc.bowlers || {})) {
+                var bst = sc.bowlers[bName];
+                var ov = Math.floor(bst.balls / 6) + "." + (bst.balls % 6);
+                var ec = bst.balls > 0 ? ((bst.runs / bst.balls) * 6).toFixed(1) : "0.0";
+                var isDouble = doubleOverList.includes(bName) || (isPairs && Math.floor(bst.balls / 6) >= 2);
+                var bBadge = isDouble ? '<span class="bowler-badge">2 Ov</span>' : '';
+                html += '<tr><td><b>' + bName + '</b>' + bBadge + '</td><td>' + ov + '</td><td>' + bst.runs + '</td><td>' + bst.wkts + '</td><td>' + ec + '</td></tr>';
+            }
+            html += '</table>';
+
+            if (Array.isArray(sc.fow) && sc.fow.length > 0) {
+                html += '<div style="font-size:0.74rem; color:#94a3b8; margin-top:10px;"><b>Fall of Wickets:</b> ' +
+                    sc.fow.map(function(f) { return f.score + '/' + f.wkt + ' (' + f.player + ', ' + f.over + ' ov)'; }).join(' | ') +
                     '</div>';
-    
-                html += '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>';
-                for (var name in (sc.batters || {})) {
-                    var st = sc.batters[name];
-                    var sr = st.balls > 0 ? ((st.runs / st.balls) * 100).toFixed(1) : "0.0";
-                    var isRebat = rebatList.includes(name) || (isPairs && st.balls > 8);
-                    var badgeHtml = isRebat ? '<span class="repeat-badge">2x</span>' : '';
-                    var ipHtml = ipMap[name] ? '<span class="ip-badge">⚡IP</span>' : '';
-                    var rColor = st.runs < 0 ? 'style="color:var(--red); font-weight:800;"' : '';
-                    html += '<tr><td><b>' + name + '</b>' + badgeHtml + ipHtml + '</td><td ' + rColor + '>' + st.runs + '</td><td>' + st.balls + '</td><td>' + st.fours + '</td><td>' + st.sixes + '</td><td>' + sr + '</td></tr>';
-                }
-                html += '</table>';
-    
-                html += '<table class="sc-table" style="margin-top:12px;"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>';
-                for (var bName in (sc.bowlers || {})) {
-                    var bst = sc.bowlers[bName];
-                    var ov = Math.floor(bst.balls / 6) + "." + (bst.balls % 6);
-                    var ec = bst.balls > 0 ? ((bst.runs / bst.balls) * 6).toFixed(1) : "0.0";
-                    var isDouble = doubleOverList.includes(bName) || (isPairs && Math.floor(bst.balls / 6) >= 2);
-                    var bBadge = isDouble ? '<span class="bowler-badge">2 Ov</span>' : '';
-                    html += '<tr><td><b>' + bName + '</b>' + bBadge + '</td><td>' + ov + '</td><td>' + bst.runs + '</td><td>' + bst.wkts + '</td><td>' + ec + '</td></tr>';
-                }
-                html += '</table>';
-    
-                if (Array.isArray(sc.fow) && sc.fow.length > 0) {
-                    html += '<div style="font-size:0.74rem; color:#94a3b8; margin-top:10px;"><b>Fall of Wickets:</b> ' +
-                        sc.fow.map(function(f) { return f.score + '/' + f.wkt + ' (' + f.player + ', ' + f.over + ' ov)'; }).join(' | ') +
-                        '</div>';
-                }
-    
-                container.innerHTML = html;
-            };
-    
-            window.saveCompletedMatchToArchive = function() {
-                var d = inspectedArchiveMatch || matchData;
-                if (!d) return;
-                var btn = document.getElementById('saveArchiveBtn');
+            }
+
+            container.innerHTML = html;
+        };
+
+        window.saveCompletedMatchToArchive = function() {
+            var d = inspectedArchiveMatch || matchData;
+            if (!d) return;
+            var btn = document.getElementById('saveArchiveBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "SAVING TO CLOUD...";
+            }
+            var cleanArchive = JSON.parse(JSON.stringify(d));
+            cleanArchive.matchId = currentMatchId;
+            cleanArchive.mvp = computeMatchMvp(d);
+            cleanArchive.timestamp = new Date().toISOString();
+
+            db.collection("match_history").add(cleanArchive).then(function() {
+                if (btn) btn.innerText = "✅ MATCH & BALL-BY-BALL SAVED!";
+            }).catch(function(err) {
                 if (btn) {
-                    btn.disabled = true;
-                    btn.innerText = "SAVING TO CLOUD...";
+                    btn.disabled = false;
+                    btn.innerText = "SAVE MATCH TO ARCHIVE 💾";
                 }
-                var cleanArchive = JSON.parse(JSON.stringify(d));
-                cleanArchive.matchId = currentMatchId;
-                cleanArchive.mvp = computeMatchMvp(d);
-                cleanArchive.timestamp = new Date().toISOString();
-    
-                db.collection("match_history").add(cleanArchive).then(function() {
-                    if (btn) btn.innerText = "✅ MATCH & BALL-BY-BALL SAVED!";
-                }).catch(function(err) {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerText = "SAVE MATCH TO ARCHIVE 💾";
-                    }
-                    alert("Saved locally (Cloud sync warning: " + err.message + ")");
-                });
+                alert("Saved locally (Cloud sync warning: " + err.message + ")");
+            });
+        };
+
+        window.startNewMatchFromScorecard = function() {
+            inspectedArchiveMatch = null;
+            window.closeModal('scorecardModal');
+            window.startHostFlow();
+        };
+
+        // --- 18. FIXTURES, STANDINGS & ARCHIVE HUBS ---
+        window.openFixturesView = function() {
+            window.setupTournamentDropdowns();
+            window.navigateView('viewFixtures');
+            window.renderScheduledFixtures();
+        };
+
+        window.createScheduledFixture = function() {
+            var t1 = document.getElementById('schedTeam1').value;
+            var t2 = document.getElementById('schedTeam2').value;
+            var fmt = document.getElementById('schedFormat').value;
+            var pitch = document.getElementById('schedPitch').value;
+            var tourney = document.getElementById('fixtureTourneyFilter').value;
+            if (!t1 || !t2 || t1 === t2) return alert("Select two different teams for the fixture.");
+
+            var fx = {
+                id: "custom_" + Date.now(),
+                team1: t1,
+                team2: t2,
+                format: fmt,
+                pitch: pitch,
+                venue: "FZC Cricket Court",
+                tournament: tourney === 'all' ? 'icl_2026' : tourney,
+                status: 'Scheduled',
+                createdAt: new Date().toISOString()
             };
-    
-            window.startNewMatchFromScorecard = function() {
-                inspectedArchiveMatch = null;
-                window.closeModal('scorecardModal');
-                window.startHostFlow();
-            };
-    
-window.syncOfficialIclToFirebase = function() {
+            scheduledFixturesList.push(fx);
+            db.collection("fixtures").doc(fx.id).set(fx).catch(function(){});
+            window.renderScheduledFixtures();
+        };
+
+        window.syncOfficialIclToFirebase = function() {
             var btn = document.getElementById('syncIclBtn');
             if (btn) {
                 btn.disabled = true;
@@ -3719,244 +3741,244 @@ window.syncOfficialIclToFirebase = function() {
             window.onFormatSelectChange();
             window.navigateView('viewTournament');
         };
-    
-            window.openHistoryView = function() {
-                window.navigateView('viewHistory');
-                window.loadMatchArchiveList();
-            };
-    
-            window.loadMatchArchiveList = function() {
-                var box = document.getElementById('historyListContainer');
-                if (!box) return;
-                box.innerHTML = "Loading completed matches...";
-                var filterEl = document.getElementById('historyTourneyFilter');
-                var filter = filterEl ? filterEl.value : 'all';
-    
-                db.collection("match_history").get().then(function(snap) {
-                    var arr = [];
-                    snap.forEach(function(docSnap) { arr.push(docSnap.data()); });
-                    archivedMatchesCache = arr.filter(function(m) {
-                        if (filter === 'all') return true;
-                        return m.tournament === filter;
-                    });
-    
-                    if (archivedMatchesCache.length === 0) {
-                        box.innerHTML = '<div style="text-align:center; padding:18px; color:#64748b;">No archived matches found.</div>';
-                        return;
-                    }
-    
-                    box.innerHTML = archivedMatchesCache.slice(-20).reverse().map(function(m, i) {
-                        var realIdx = archivedMatchesCache.length - 1 - i;
-                        var tAName = m.tA ? m.tA.name : "Team A";
-                        var tBName = m.tB ? m.tB.name : "Team B";
-                        var scA = m.tA ? (m.tA.score + "/" + m.tA.wkts) : "0/0";
-                        var scB = m.tB ? (m.tB.score + "/" + m.tB.wkts) : "0/0";
-                        return '<div class="archive-card" onclick="window.inspectArchivedMatch(' + realIdx + ')" style="cursor:pointer;">' +
-                            '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8;">' +
-                            '<span>' + getTournamentDisplayName(m.tournament) + '</span><span>' + (m.rulesFormat || 'pairs').toUpperCase() + '</span></div>' +
-                            '<div style="font-size:0.88rem; font-weight:900; color:var(--blue); margin:4px 0;">' + tAName + ' (' + scA + ') vs ' + tBName + ' (' + scB + ')</div>' +
-                            '<div style="font-size:0.78rem; color:var(--gold); font-weight:800;">' + (m.winner || m.match_status || 'Completed') + '</div>' +
-                            '<div style="font-size:0.7rem; color:#64748b; margin-top:4px;">Tap to inspect full scorecard & ball-by-ball replay &rarr;</div>' +
-                            '</div>';
-                    }).join('');
-                }).catch(function(err) {
-                    box.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">Unable to load archives: ' + err.message + '</div>';
+
+        window.openHistoryView = function() {
+            window.navigateView('viewHistory');
+            window.loadMatchArchiveList();
+        };
+
+        window.loadMatchArchiveList = function() {
+            var box = document.getElementById('historyListContainer');
+            if (!box) return;
+            box.innerHTML = "Loading completed matches...";
+            var filterEl = document.getElementById('historyTourneyFilter');
+            var filter = filterEl ? filterEl.value : 'all';
+
+            db.collection("match_history").get().then(function(snap) {
+                var arr = [];
+                snap.forEach(function(docSnap) { arr.push(docSnap.data()); });
+                archivedMatchesCache = arr.filter(function(m) {
+                    if (filter === 'all') return true;
+                    return m.tournament === filter;
                 });
-            };
-    
-            window.inspectArchivedMatch = function(idx) {
-                var m = archivedMatchesCache[idx];
-                if (!m) return;
-                inspectedArchiveMatch = m;
-                renderScorecardModal(m);
-            };
-    
-            window.openStandingsView = function() {
-                window.navigateView('viewStandings');
-                db.collection("match_history").get().then(function(snap) {
-                    var arr = [];
-                    snap.forEach(function(d) { arr.push(d.data()); });
-                    archivedMatchesCache = arr;
-                    window.switchStandingsTab('points');
-                }).catch(function() {
-                    window.switchStandingsTab('points');
-                });
-            };
-    
-            window.switchStandingsTab = function(tab) {
-                document.getElementById('stdTabPoints').classList.toggle('active', tab === 'points');
-                document.getElementById('stdTabOrange').classList.toggle('active', tab === 'orange');
-                document.getElementById('stdTabPurple').classList.toggle('active', tab === 'purple');
-                document.getElementById('stdTabFielding').classList.toggle('active', tab === 'fielding');
-    
-                var box = document.getElementById('standingsContentBox');
-                var matches = archivedMatchesCache.filter(function(m) { return m.match_status === 'completed'; });
-    
-                if (matches.length === 0) {
-                    box.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No completed matches saved in archive yet.</div>';
+
+                if (archivedMatchesCache.length === 0) {
+                    box.innerHTML = '<div style="text-align:center; padding:18px; color:#64748b;">No archived matches found.</div>';
                     return;
                 }
-    
-                if (tab === 'points') {
-                    var table = {};
-                    matches.forEach(function(m) {
-                        var nA = m.tA ? m.tA.name : "Team A";
-                        var nB = m.tB ? m.tB.name : "Team B";
-                        if (!table[nA]) table[nA] = { p: 0, w: 0, l: 0, pts: 0 };
-                        if (!table[nB]) table[nB] = { p: 0, w: 0, l: 0, pts: 0 };
-                        table[nA].p += 1;
-                        table[nB].p += 1;
-                        var wText = m.winner || "";
-                        if (wText.indexOf(nA) !== -1) {
-                            table[nA].w += 1; table[nA].pts += 2; table[nB].l += 1;
-                        } else if (wText.indexOf(nB) !== -1) {
-                            table[nB].w += 1; table[nB].pts += 2; table[nA].l += 1;
-                        } else {
-                            table[nA].pts += 1; table[nB].pts += 1;
+
+                box.innerHTML = archivedMatchesCache.slice(-20).reverse().map(function(m, i) {
+                    var realIdx = archivedMatchesCache.length - 1 - i;
+                    var tAName = m.tA ? m.tA.name : "Team A";
+                    var tBName = m.tB ? m.tB.name : "Team B";
+                    var scA = m.tA ? (m.tA.score + "/" + m.tA.wkts) : "0/0";
+                    var scB = m.tB ? (m.tB.score + "/" + m.tB.wkts) : "0/0";
+                    return '<div class="archive-card" onclick="window.inspectArchivedMatch(' + realIdx + ')" style="cursor:pointer;">' +
+                        '<div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#94a3b8;">' +
+                        '<span>' + getTournamentDisplayName(m.tournament) + '</span><span>' + (m.rulesFormat || 'pairs').toUpperCase() + '</span></div>' +
+                        '<div style="font-size:0.88rem; font-weight:900; color:var(--blue); margin:4px 0;">' + tAName + ' (' + scA + ') vs ' + tBName + ' (' + scB + ')</div>' +
+                        '<div style="font-size:0.78rem; color:var(--gold); font-weight:800;">' + (m.winner || m.match_status || 'Completed') + '</div>' +
+                        '<div style="font-size:0.7rem; color:#64748b; margin-top:4px;">Tap to inspect full scorecard & ball-by-ball replay &rarr;</div>' +
+                        '</div>';
+                }).join('');
+            }).catch(function(err) {
+                box.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b;">Unable to load archives: ' + err.message + '</div>';
+            });
+        };
+
+        window.inspectArchivedMatch = function(idx) {
+            var m = archivedMatchesCache[idx];
+            if (!m) return;
+            inspectedArchiveMatch = m;
+            renderScorecardModal(m);
+        };
+
+        window.openStandingsView = function() {
+            window.navigateView('viewStandings');
+            db.collection("match_history").get().then(function(snap) {
+                var arr = [];
+                snap.forEach(function(d) { arr.push(d.data()); });
+                archivedMatchesCache = arr;
+                window.switchStandingsTab('points');
+            }).catch(function() {
+                window.switchStandingsTab('points');
+            });
+        };
+
+        window.switchStandingsTab = function(tab) {
+            document.getElementById('stdTabPoints').classList.toggle('active', tab === 'points');
+            document.getElementById('stdTabOrange').classList.toggle('active', tab === 'orange');
+            document.getElementById('stdTabPurple').classList.toggle('active', tab === 'purple');
+            document.getElementById('stdTabFielding').classList.toggle('active', tab === 'fielding');
+
+            var box = document.getElementById('standingsContentBox');
+            var matches = archivedMatchesCache.filter(function(m) { return m.match_status === 'completed'; });
+
+            if (matches.length === 0) {
+                box.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No completed matches saved in archive yet.</div>';
+                return;
+            }
+
+            if (tab === 'points') {
+                var table = {};
+                matches.forEach(function(m) {
+                    var nA = m.tA ? m.tA.name : "Team A";
+                    var nB = m.tB ? m.tB.name : "Team B";
+                    if (!table[nA]) table[nA] = { p: 0, w: 0, l: 0, pts: 0 };
+                    if (!table[nB]) table[nB] = { p: 0, w: 0, l: 0, pts: 0 };
+                    table[nA].p += 1;
+                    table[nB].p += 1;
+                    var wText = m.winner || "";
+                    if (wText.indexOf(nA) !== -1) {
+                        table[nA].w += 1; table[nA].pts += 2; table[nB].l += 1;
+                    } else if (wText.indexOf(nB) !== -1) {
+                        table[nB].w += 1; table[nB].pts += 2; table[nA].l += 1;
+                    } else {
+                        table[nA].pts += 1; table[nB].pts += 1;
+                    }
+                });
+                var rows = Object.keys(table).map(function(k) { return Object.assign({ team: k }, table[k]); })
+                    .sort(function(a, b) { return b.pts - a.pts; });
+
+                var html = '<table class="sc-table"><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th></tr>';
+                rows.forEach(function(r) {
+                    html += '<tr><td><b>' + r.team + '</b></td><td>' + r.p + '</td><td>' + r.w + '</td><td>' + r.l + '</td><td style="color:var(--gold); font-weight:900;">' + r.pts + '</td></tr>';
+                });
+                html += '</table>';
+                box.innerHTML = html;
+            } else if (tab === 'orange') {
+                var batMap = {};
+                matches.forEach(function(m) {
+                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
+                        var sc = m[k];
+                        if (!sc || !sc.batters) return;
+                        for (var p in sc.batters) {
+                            if (!batMap[p]) batMap[p] = { runs: 0, balls: 0, sixes: 0 };
+                            batMap[p].runs += (sc.batters[p].runs || 0);
+                            batMap[p].balls += (sc.batters[p].balls || 0);
+                            batMap[p].sixes += (sc.batters[p].sixes || 0);
                         }
                     });
-                    var rows = Object.keys(table).map(function(k) { return Object.assign({ team: k }, table[k]); })
-                        .sort(function(a, b) { return b.pts - a.pts; });
-    
-                    var html = '<table class="sc-table"><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th></tr>';
-                    rows.forEach(function(r) {
-                        html += '<tr><td><b>' + r.team + '</b></td><td>' + r.p + '</td><td>' + r.w + '</td><td>' + r.l + '</td><td style="color:var(--gold); font-weight:900;">' + r.pts + '</td></tr>';
-                    });
-                    html += '</table>';
-                    box.innerHTML = html;
-                } else if (tab === 'orange') {
-                    var batMap = {};
-                    matches.forEach(function(m) {
-                        ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
-                            var sc = m[k];
-                            if (!sc || !sc.batters) return;
-                            for (var p in sc.batters) {
-                                if (!batMap[p]) batMap[p] = { runs: 0, balls: 0, sixes: 0 };
-                                batMap[p].runs += (sc.batters[p].runs || 0);
-                                batMap[p].balls += (sc.batters[p].balls || 0);
-                                batMap[p].sixes += (sc.batters[p].sixes || 0);
-                            }
-                        });
-                    });
-                    var bList = Object.keys(batMap).map(function(k) { return Object.assign({ name: k }, batMap[k]); })
-                        .sort(function(a, b) { return b.runs - a.runs; }).slice(0, 10);
-                    var bHtml = '<table class="sc-table"><tr><th>Batter</th><th>Runs</th><th>Balls</th><th>6s</th></tr>';
-                    bList.forEach(function(r) {
-                        bHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--orange); font-weight:900;">' + r.runs + '</td><td>' + r.balls + '</td><td>' + r.sixes + '</td></tr>';
-                    });
-                    bHtml += '</table>';
-                    box.innerHTML = bHtml;
-                } else if (tab === 'purple') {
-                    var bowlMap = {};
-                    matches.forEach(function(m) {
-                        ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
-                            var sc = m[k];
-                            if (!sc || !sc.bowlers) return;
-                            for (var p in sc.bowlers) {
-                                if (!bowlMap[p]) bowlMap[p] = { wkts: 0, runs: 0, balls: 0 };
-                                bowlMap[p].wkts += (sc.bowlers[p].wkts || 0);
-                                bowlMap[p].runs += (sc.bowlers[p].runs || 0);
-                                bowlMap[p].balls += (sc.bowlers[p].balls || 0);
-                            }
-                        });
-                    });
-                    var bwList = Object.keys(bowlMap).map(function(k) { return Object.assign({ name: k }, bowlMap[k]); })
-                        .sort(function(a, b) { return b.wkts - a.wkts || a.runs - b.runs; }).slice(0, 10);
-                    var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr>';
-                    bwList.forEach(function(r) {
-                        bwHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + r.runs + '</td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td></tr>';
-                    });
-                    bwHtml += '</table>';
-                    box.innerHTML = bwHtml;
-                } else {
-                    var fldMap = {};
-                    matches.forEach(function(m) {
-                        ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
-                            var sc = m[k];
-                            if (!sc || !sc.fielders) return;
-                            for (var p in sc.fielders) {
-                                if (!fldMap[p]) fldMap[p] = { catches: 0, runOuts: 0, total: 0 };
-                                fldMap[p].catches += (sc.fielders[p].catches || 0);
-                                fldMap[p].runOuts += (sc.fielders[p].runOuts || 0);
-                                fldMap[p].total += (sc.fielders[p].catches || 0) + (sc.fielders[p].runOuts || 0);
-                            }
-                        });
-                    });
-                    var fList = Object.keys(fldMap).map(function(k) { return Object.assign({ name: k }, fldMap[k]); })
-                        .sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
-                    var fHtml = '<table class="sc-table"><tr><th>Fielder</th><th>Catches</th><th>Run Outs</th><th>Total</th></tr>';
-                    fList.forEach(function(r) {
-                        fHtml += '<tr><td><b>' + r.name + '</b></td><td>' + r.catches + '</td><td>' + r.runOuts + '</td><td style="color:var(--green); font-weight:900;">' + r.total + '</td></tr>';
-                    });
-                    fHtml += '</table>';
-                    box.innerHTML = fHtml;
-                }
-            };
-    
-            // --- PREVIOUS OVER INSPECTOR (UI PILLS) ---
-            window.openPrevOverModal = function() {
-                var d = inspectedArchiveMatch || matchData;
-                if (!d) return alert("No active match data.");
-    
-                var timeline = Array.isArray(d.ball_timeline) ? d.ball_timeline : [];
-                var grouped = {};
-    
-                timeline.forEach(function(item) {
-                    var ov = item.over || 1;
-                    var inn = item.inn || 1;
-                    var key = "Inn " + inn + " - Over " + ov;
-                    if (!grouped[key]) {
-                        grouped[key] = {
-                            inn: inn,
-                            over: ov,
-                            bowler: item.bowler || "Bowler",
-                            balls: []
-                        };
-                    }
-                    grouped[key].balls.push(item);
                 });
-    
-                var keys = Object.keys(grouped);
-                if (keys.length === 0) {
-                    return alert("No completed deliveries recorded yet.");
-                }
-    
-                var sel = document.getElementById('prevOverSelect');
-                sel.innerHTML = '';
-                keys.reverse().forEach(function(k) {
-                    sel.add(new Option(k + " (Bowler: " + grouped[k].bowler + ")", k));
+                var bList = Object.keys(batMap).map(function(k) { return Object.assign({ name: k }, batMap[k]); })
+                    .sort(function(a, b) { return b.runs - a.runs; }).slice(0, 10);
+                var bHtml = '<table class="sc-table"><tr><th>Batter</th><th>Runs</th><th>Balls</th><th>6s</th></tr>';
+                bList.forEach(function(r) {
+                    bHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--orange); font-weight:900;">' + r.runs + '</td><td>' + r.balls + '</td><td>' + r.sixes + '</td></tr>';
                 });
-    
-                window.currentGroupedOvers = grouped;
-                window.renderSelectedPrevOver();
-                document.getElementById('prevOverModal').classList.remove('hidden');
-            };
-    
-            window.renderSelectedPrevOver = function() {
-                var selVal = document.getElementById('prevOverSelect').value;
-                var group = window.currentGroupedOvers ? window.currentGroupedOvers[selVal] : null;
-                var box = document.getElementById('prevOverDetailsBox');
-                if (!group || !box) return;
-    
-                var pillsHtml = group.balls.map(function(b) {
-                    var s = String(b.event);
-                    var cls = 'bg-white';
-                    if (s === 'W' || s.indexOf('3D') !== -1) cls = 'bg-red';
-                    else if (s.indexOf('Wd') !== -1 || s.indexOf('N') !== -1) cls = 'bg-yellow';
-                    else if (s.indexOf('B') !== -1 || s.indexOf('D') !== -1) cls = 'bg-blue';
-                    else if (s === '4' || s === '6') cls = 'bg-green';
-                    return '<div class="ball ' + cls + '" style="margin:2px 3px;">' + s + '</div>';
-                }).join('');
-    
-                var lastBall = group.balls[group.balls.length - 1];
-                var endScore = lastBall.scoreAfter || (lastBall.score + "/" + lastBall.wkts);
-    
-                box.innerHTML =
-                    '<div style="color:var(--blue); font-weight:900; font-size:0.95rem; margin-bottom:4px;">' + selVal + '</div>' +
-                    '<div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:10px;">Bowler: <b style="color:white;">' + group.bowler + '</b> | Score at end of over: <b style="color:var(--gold);">' + endScore + '</b></div>' +
-                    '<div style="font-size:0.75rem; color:#94a3b8; font-weight:700; margin-bottom:6px;">Ball-by-Ball Sequence:</div>' +
-                    '<div style="display:flex; justify-content:center; flex-wrap:wrap; gap:4px; min-height:36px;">' + pillsHtml + '</div>';
-            };
+                bHtml += '</table>';
+                box.innerHTML = bHtml;
+            } else if (tab === 'purple') {
+                var bowlMap = {};
+                matches.forEach(function(m) {
+                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
+                        var sc = m[k];
+                        if (!sc || !sc.bowlers) return;
+                        for (var p in sc.bowlers) {
+                            if (!bowlMap[p]) bowlMap[p] = { wkts: 0, runs: 0, balls: 0 };
+                            bowlMap[p].wkts += (sc.bowlers[p].wkts || 0);
+                            bowlMap[p].runs += (sc.bowlers[p].runs || 0);
+                            bowlMap[p].balls += (sc.bowlers[p].balls || 0);
+                        }
+                    });
+                });
+                var bwList = Object.keys(bowlMap).map(function(k) { return Object.assign({ name: k }, bowlMap[k]); })
+                    .sort(function(a, b) { return b.wkts - a.wkts || a.runs - b.runs; }).slice(0, 10);
+                var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr>';
+                bwList.forEach(function(r) {
+                    bwHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + r.runs + '</td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td></tr>';
+                });
+                bwHtml += '</table>';
+                box.innerHTML = bwHtml;
+            } else {
+                var fldMap = {};
+                matches.forEach(function(m) {
+                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
+                        var sc = m[k];
+                        if (!sc || !sc.fielders) return;
+                        for (var p in sc.fielders) {
+                            if (!fldMap[p]) fldMap[p] = { catches: 0, runOuts: 0, total: 0 };
+                            fldMap[p].catches += (sc.fielders[p].catches || 0);
+                            fldMap[p].runOuts += (sc.fielders[p].runOuts || 0);
+                            fldMap[p].total += (sc.fielders[p].catches || 0) + (sc.fielders[p].runOuts || 0);
+                        }
+                    });
+                });
+                var fList = Object.keys(fldMap).map(function(k) { return Object.assign({ name: k }, fldMap[k]); })
+                    .sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
+                var fHtml = '<table class="sc-table"><tr><th>Fielder</th><th>Catches</th><th>Run Outs</th><th>Total</th></tr>';
+                fList.forEach(function(r) {
+                    fHtml += '<tr><td><b>' + r.name + '</b></td><td>' + r.catches + '</td><td>' + r.runOuts + '</td><td style="color:var(--green); font-weight:900;">' + r.total + '</td></tr>';
+                });
+                fHtml += '</table>';
+                box.innerHTML = fHtml;
+            }
+        };
+
+        // --- PREVIOUS OVER INSPECTOR (UI PILLS) ---
+        window.openPrevOverModal = function() {
+            var d = inspectedArchiveMatch || matchData;
+            if (!d) return alert("No active match data.");
+
+            var timeline = Array.isArray(d.ball_timeline) ? d.ball_timeline : [];
+            var grouped = {};
+
+            timeline.forEach(function(item) {
+                var ov = item.over || 1;
+                var inn = item.inn || 1;
+                var key = "Inn " + inn + " - Over " + ov;
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        inn: inn,
+                        over: ov,
+                        bowler: item.bowler || "Bowler",
+                        balls: []
+                    };
+                }
+                grouped[key].balls.push(item);
+            });
+
+            var keys = Object.keys(grouped);
+            if (keys.length === 0) {
+                return alert("No completed deliveries recorded yet.");
+            }
+
+            var sel = document.getElementById('prevOverSelect');
+            sel.innerHTML = '';
+            keys.reverse().forEach(function(k) {
+                sel.add(new Option(k + " (Bowler: " + grouped[k].bowler + ")", k));
+            });
+
+            window.currentGroupedOvers = grouped;
+            window.renderSelectedPrevOver();
+            document.getElementById('prevOverModal').classList.remove('hidden');
+        };
+
+        window.renderSelectedPrevOver = function() {
+            var selVal = document.getElementById('prevOverSelect').value;
+            var group = window.currentGroupedOvers ? window.currentGroupedOvers[selVal] : null;
+            var box = document.getElementById('prevOverDetailsBox');
+            if (!group || !box) return;
+
+            var pillsHtml = group.balls.map(function(b) {
+                var s = String(b.event);
+                var cls = 'bg-white';
+                if (s === 'W' || s.indexOf('3D') !== -1) cls = 'bg-red';
+                else if (s.indexOf('Wd') !== -1 || s.indexOf('N') !== -1) cls = 'bg-yellow';
+                else if (s.indexOf('B') !== -1 || s.indexOf('D') !== -1) cls = 'bg-blue';
+                else if (s === '4' || s === '6') cls = 'bg-green';
+                return '<div class="ball ' + cls + '" style="margin:2px 3px;">' + s + '</div>';
+            }).join('');
+
+            var lastBall = group.balls[group.balls.length - 1];
+            var endScore = lastBall.scoreAfter || (lastBall.score + "/" + lastBall.wkts);
+
+            box.innerHTML =
+                '<div style="color:var(--blue); font-weight:900; font-size:0.95rem; margin-bottom:4px;">' + selVal + '</div>' +
+                '<div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:10px;">Bowler: <b style="color:white;">' + group.bowler + '</b> | Score at end of over: <b style="color:var(--gold);">' + endScore + '</b></div>' +
+                '<div style="font-size:0.75rem; color:#94a3b8; font-weight:700; margin-bottom:6px;">Ball-by-Ball Sequence:</div>' +
+                '<div style="display:flex; justify-content:center; flex-wrap:wrap; gap:4px; min-height:36px;">' + pillsHtml + '</div>';
+        };
 
         // --- 18B. LIVE TOURNAMENT HUB QR LINK SHARING ---
         window.shareLiveMatchLink = function() {
