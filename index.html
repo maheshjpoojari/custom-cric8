@@ -3705,18 +3705,23 @@
             });
         };
 
-        function drawFixturesList(box) {
+function drawFixturesList(box) {
             var filterEl = document.getElementById('fixtureTourneyFilter');
-            var filter = filterEl ? filterEl.value : 'FZ_ICL_2026';
+            var filter = filterEl ? filterEl.value : 'icl_2026';
+            
             var list = scheduledFixturesList.filter(function(f) {
                 if (filter === 'all') return true;
-                return (f.tournament || 'FZ_ICL_2026') === filter;
+                var fTourney = (f.tournament || 'icl_2026');
+                // Allow flexible matching for ICL
+                if (filter === 'icl_2026' && (fTourney === 'icl_2026' || fTourney === 'icl')) return true;
+                return fTourney === filter;
             });
 
             if (list.length === 0) {
-                box.innerHTML = '<div style="text-align:center; padding:14px; color:#64748b; font-size:0.8rem;">No scheduled fixtures for this filter.</div>';
+                box.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.8rem;">No scheduled fixtures found for <b>' + (filterEl ? filterEl.options[filterEl.selectedIndex].text : filter) + '</b>.<br><span style="font-size:0.72rem; color:#475569;">You can schedule a new fixture using the form below.</span></div>';
                 return;
             }
+
             box.innerHTML = list.map(function(f) {
                 var headerLeft = f.matchNo ? (f.matchNo + " • " + (f.date || "") + " (" + (f.time || "") + ")") : (f.pitch || 'pitch_1').toUpperCase();
                 var venueTag = f.venue || "FZC Cricket Court";
@@ -3724,7 +3729,7 @@
                     '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--gold); font-weight:800;">' +
                     '<span>' + headerLeft + '</span><span>' + venueTag + '</span></div>' +
                     '<div style="font-size:0.92rem; font-weight:900; color:#fff; margin:6px 0;">' + f.team1 + ' vs ' + f.team2 + '</div>' +
-                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button>' +
+                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'icl_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button>' +
                     '</div>';
             }).join('');
         }
