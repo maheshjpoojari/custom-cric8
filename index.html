@@ -783,8 +783,8 @@
 
             <div class="tab-bar">
                 <button class="tab-btn active" id="stdTabPoints" onclick="window.switchStandingsTab('points')">Points Table</button>
-                <button class="tab-btn" id="stdTabOrange" onclick="window.switchStandingsTab('orange')">🧡 Batting Cap</button>
-                <button class="tab-btn" id="stdTabPurple" onclick="window.switchStandingsTab('purple')">💜 Bowling Cap</button>
+                <button class="tab-btn" id="stdTabOrange" onclick="window.switchStandingsTab('orange')">🧢 Batting Cap</button>
+                <button class="tab-btn" id="stdTabPurple" onclick="window.switchStandingsTab('purple')">🧢 Bowling Cap</button>
                 <button class="tab-btn" id="stdTabFielding" onclick="window.switchStandingsTab('fielding')">🧤 Fielding</button>
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
@@ -3724,7 +3724,7 @@ function drawFixturesList(box) {
                 if (filter === 'all') return true;
                 var fTourney = (f.tournament || 'FZ_ICL_2026');
                 // Allow flexible matching for ICL
-                if (filter === 'FZ_ICL_2026' && (fTourney === 'icl_2026' || fTourney === 'icl')) return true;
+                if (filter === 'FZ_ICL_2026' && fTourney === 'FZ_ICL_2026') return true;
                 return fTourney === filter;
             });
 
@@ -3740,7 +3740,7 @@ function drawFixturesList(box) {
                     '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--gold); font-weight:800;">' +
                     '<span>' + headerLeft + '</span><span>' + venueTag + '</span></div>' +
                     '<div style="font-size:0.92rem; font-weight:900; color:#fff; margin:6px 0;">' + f.team1 + ' vs ' + f.team2 + '</div>' +
-                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'icl_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button>' +
+                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button>' +
                     '</div>';
             }).join('');
         }
@@ -3821,6 +3821,17 @@ function drawFixturesList(box) {
             });
         };
 window.switchStandingsTab = function(tab) {
+            var tourneyEl = document.getElementById('standingsTourneyFilter');
+            var currentTourney = tourneyEl ? tourneyEl.value : 'FZ_ICL_2026';
+            var isIcl = currentTourney === 'FZ_ICL_2026';
+            var btnOrangeEl = document.getElementById('stdTabOrange');
+            var btnPurpleEl = document.getElementById('stdTabPurple');
+            var btnFieldingEl = document.getElementById('stdTabFielding');
+            if (btnOrangeEl) btnOrangeEl.innerText = isIcl ? '🧢 Orange Cap' : '🧢 Batting Cap';
+            if (btnPurpleEl) btnPurpleEl.innerText = isIcl ? '🧢 Purple Cap' : '🧢 Bowling Cap';
+            if (btnFieldingEl) btnFieldingEl.classList.toggle('hidden', isIcl);
+            if (isIcl && tab === 'fielding') tab = 'points';
+
             window.activeStandingsTab = tab;
             document.getElementById('stdTabPoints').classList.toggle('active', tab === 'points');
             document.getElementById('stdTabOrange').classList.toggle('active', tab === 'orange');
@@ -3829,12 +3840,12 @@ window.switchStandingsTab = function(tab) {
 
             var box = document.getElementById('standingsContentBox');
             var filterEl = document.getElementById('standingsTourneyFilter');
-            var selectedTourney = filterEl ? filterEl.value : 'icl_2026';
+            var selectedTourney = filterEl ? filterEl.value : 'FZ_ICL_2026';
 
             var matches = archivedMatchesCache.filter(function(m) {
                 if (m.match_status !== 'completed') return false;
-                var mTourney = (m.tournament || 'icl_2026');
-                if (selectedTourney === 'icl_2026' && (mTourney === 'icl_2026' || mTourney === 'icl')) return true;
+                var mTourney = (m.tournament || 'FZ_ICL_2026');
+                if (isIcl && (mTourney === 'FZ_ICL_2026')) return true;
                 return mTourney === selectedTourney;
             });
 
@@ -3843,7 +3854,41 @@ window.switchStandingsTab = function(tab) {
                 return;
             }
 
-            if (tab === 'points') {
+            if (tab === 'points' && isIcl) {
+                var ICL_RULES = { win: 2, draw: 1, loss: 0, walkover: 2 };
+                var iclTable = {};
+                matches.forEach(function(m) {
+                    var nA = m.tA ? m.tA.name : "Team A";
+                    var nB = m.tB ? m.tB.name : "Team B";
+                    if (!iclTable[nA]) iclTable[nA] = { p: 0, w: 0, l: 0, pts: 0 };
+                    if (!iclTable[nB]) iclTable[nB] = { p: 0, w: 0, l: 0, pts: 0 };
+                    iclTable[nA].p += 1;
+                    iclTable[nB].p += 1;
+                    var wText = String(m.winner || "");
+                    var isWalkover = wText.indexOf("Walkover") !== -1;
+                    var isTie = wText.indexOf("TIED") !== -1;
+                    var winPts = isWalkover ? ICL_RULES.walkover : ICL_RULES.win;
+                    if (!isTie && wText.indexOf(nA) !== -1) {
+                        iclTable[nA].w += 1; iclTable[nA].pts += winPts;
+                        iclTable[nB].l += 1; iclTable[nB].pts += ICL_RULES.loss;
+                    } else if (!isTie && wText.indexOf(nB) !== -1) {
+                        iclTable[nB].w += 1; iclTable[nB].pts += winPts;
+                        iclTable[nA].l += 1; iclTable[nA].pts += ICL_RULES.loss;
+                    } else {
+                        iclTable[nA].pts += ICL_RULES.draw; iclTable[nB].pts += ICL_RULES.draw;
+                    }
+                });
+                var iclRows = Object.keys(iclTable).map(function(k) { return Object.assign({ team: k }, iclTable[k]); })
+                    .sort(function(a, b) { return b.pts - a.pts || b.w - a.w; });
+
+                var iclHtml = '<table class="sc-table"><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th></tr>';
+                iclRows.forEach(function(r) {
+                    iclHtml += '<tr><td><b>' + r.team + '</b></td><td>' + r.p + '</td><td>' + r.w + '</td><td>' + r.l + '</td><td style="color:var(--gold); font-weight:900;">' + r.pts + '</td></tr>';
+                });
+                iclHtml += '</table>';
+                iclHtml += '<div style="font-size:0.72rem; color:#64748b; margin-top:8px; text-align:center;">Win 2 pts · Draw 1 pt · Loss 0 pt · Walkover 2 pts</div>';
+                box.innerHTML = iclHtml;
+            } else if (tab === 'points') {
                 var table = {};
                 matches.forEach(function(m) {
                     var nA = m.tA ? m.tA.name : "Team A";
