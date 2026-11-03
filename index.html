@@ -764,12 +764,24 @@
         </div>
     </div>
 
-    <!-- ==========================================
+<!-- ==========================================
          VIEW 4: STANDINGS & CAP LEADERBOARDS
          ========================================== -->
     <div id="viewStandings" class="app-view hidden">
         <div class="view-card">
             <h2 class="view-title">📊 STANDINGS & LEADERBOARDS</h2>
+            
+            <div class="input-group" style="margin-bottom:12px;">
+                <label>Filter by Tournament</label>
+                <select id="standingsTourneyFilter" class="input-field" onchange="window.switchStandingsTab(window.activeStandingsTab || 'points')">
+                    <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                    <option value="all">All Tournaments Combined</option>
+                    <option value="corporate">Corporate Cric-8 Cup</option>
+                    <option value="premier">Weekend Premier League</option>
+                    <option value="friendly">Friendly / Exhibition</option>
+                </select>
+            </div>
+
             <div class="tab-bar">
                 <button class="tab-btn active" id="stdTabPoints" onclick="window.switchStandingsTab('points')">Points Table</button>
                 <button class="tab-btn" id="stdTabOrange" onclick="window.switchStandingsTab('orange')">🧡 Batting Cap</button>
@@ -3809,18 +3821,27 @@ function drawFixturesList(box) {
                 window.switchStandingsTab('points');
             });
         };
-
-        window.switchStandingsTab = function(tab) {
+window.switchStandingsTab = function(tab) {
+            window.activeStandingsTab = tab;
             document.getElementById('stdTabPoints').classList.toggle('active', tab === 'points');
             document.getElementById('stdTabOrange').classList.toggle('active', tab === 'orange');
             document.getElementById('stdTabPurple').classList.toggle('active', tab === 'purple');
             document.getElementById('stdTabFielding').classList.toggle('active', tab === 'fielding');
 
             var box = document.getElementById('standingsContentBox');
-            var matches = archivedMatchesCache.filter(function(m) { return m.match_status === 'completed'; });
+            var filterEl = document.getElementById('standingsTourneyFilter');
+            var selectedTourney = filterEl ? filterEl.value : 'icl_2026';
+
+            var matches = archivedMatchesCache.filter(function(m) {
+                if (m.match_status !== 'completed') return false;
+                if (selectedTourney === 'all') return true;
+                var mTourney = (m.tournament || 'icl_2026');
+                if (selectedTourney === 'icl_2026' && (mTourney === 'icl_2026' || mTourney === 'icl')) return true;
+                return mTourney === selectedTourney;
+            });
 
             if (matches.length === 0) {
-                box.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No completed matches saved in archive yet.</div>';
+                box.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No completed matches found for this tournament filter.</div>';
                 return;
             }
 
@@ -3874,6 +3895,52 @@ function drawFixturesList(box) {
                 bHtml += '</table>';
                 box.innerHTML = bHtml;
             } else if (tab === 'purple') {
+                var bowlMap = {};
+                matches.forEach(function(m) {
+                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
+                        var sc = m[k];
+                        if (!sc || !sc.bowlers) return;
+                        for (var p in sc.bowlers) {
+                            if (!bowlMap[p]) bowlMap[p] = { wkts: 0, runs: 0, balls: 0 };
+                            bowlMap[p].wkts += (sc.bowlers[p].wkts || 0);
+                            bowlMap[p].runs += (sc.bowlers[p].runs || 0);
+                            bowlMap[p].balls += (sc.bowlers[p].balls || 0);
+                        }
+                    });
+                });
+                var bwList = Object.keys(bowlMap).map(function(k) { return Object.assign({ name: k }, bowlMap[k]); })
+                    .sort(function(a, b) { return b.wkts - a.wkts || a.runs - b.runs; }).slice(0, 10);
+                var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr>';
+                bwList.forEach(function(r) {
+                    bwHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + r.runs + '</td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td></tr>';
+                });
+                bwHtml += '</table>';
+                box.innerHTML = bwHtml;
+            } else {
+                var fldMap = {};
+                matches.forEach(function(m) {
+                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
+                        var sc = m[k];
+                        if (!sc || !sc.fielders) return;
+                        for (var p in sc.fielders) {
+                            if (!fldMap[p]) fldMap[p] = { catches: 0, runOuts: 0, total: 0 };
+                            fldMap[p].catches += (sc.fielders[p].catches || 0);
+                            fldMap[p].runOuts += (sc.fielders[p].runOuts || 0);
+                            fldMap[p].total += (sc.fielders[p].catches || 0) + (sc.fielders[p].runOuts || 0);
+                        }
+                    });
+                });
+                var fList = Object.keys(fldMap).map(function(k) { return Object.assign({ name: k }, fldMap[k]); })
+                    .sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
+                var fHtml = '<table class="sc-table"><tr><th>Fielder</th><th>Catches</th><th>Run Outs</th><th>Total</th></tr>';
+                fList.forEach(function(r) {
+                    fHtml += '<tr><td><b>' + r.name + '</b></td><td>' + r.catches + '</td><td>' + r.runOuts + '</td><td style="color:var(--green); font-weight:900;">' + r.total + '</td></tr>';
+                });
+                fHtml += '</table>';
+                box.innerHTML = fHtml;
+            }
+        };
+        else if (tab === 'purple') {
                 var bowlMap = {};
                 matches.forEach(function(m) {
                     ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
