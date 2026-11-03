@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Custom Cric-8 Arena — Official Tournament & Live Scoring Console</title>
+    <title>Cric-8 Arena — Official Tournament & Live Scoring Console</title>
     <!-- Firebase Compat SDKs (Synchronous & Mobile-Safe) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -646,7 +646,7 @@
          ========================================== -->
     <div id="viewHome" class="app-view">
         <div class="view-card">
-            <h2 class="view-title">🏏 CUSTOM CRIC-8 ARENA CONSOLE</h2>
+            <h2 class="view-title">🏏 CRIC-8 ARENA CONSOLE</h2>
 
             <button class="btn btn-red btn-block" onclick="window.openLiveHubView()">🔴 LIVE MATCHES (GROUND QR HUB)</button>
             <button class="btn btn-blue btn-block" onclick="window.startHostFlow()">⚡ SCORE A QUICK MATCH</button>
@@ -775,7 +775,6 @@
                 <label>Filter by Tournament</label>
                 <select id="standingsTourneyFilter" class="input-field" onchange="window.switchStandingsTab(window.activeStandingsTab || 'points')">
                     <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
-                    <option value="all">All Tournaments Combined</option>
                     <option value="corporate">Corporate Cric-8 Cup</option>
                     <option value="premier">Weekend Premier League</option>
                     <option value="friendly">Friendly / Exhibition</option>
@@ -3834,7 +3833,6 @@ window.switchStandingsTab = function(tab) {
 
             var matches = archivedMatchesCache.filter(function(m) {
                 if (m.match_status !== 'completed') return false;
-                if (selectedTourney === 'all') return true;
                 var mTourney = (m.tournament || 'icl_2026');
                 if (selectedTourney === 'icl_2026' && (mTourney === 'icl_2026' || mTourney === 'icl')) return true;
                 return mTourney === selectedTourney;
