@@ -3986,20 +3986,20 @@ function drawFixturesList(box) {
         };
 
         // --- 18B. LIVE TOURNAMENT HUB QR LINK SHARING ---
-        window.shareLiveMatchLink = function() {
+window.shareLiveMatchLink = function() {
             var baseUrl = window.location.origin + window.location.pathname;
             var shareUrl = baseUrl + "?view=hub";
-            var shareText = "🏏 Watch All LIVE Cricket Matches on Cric-8 Live Tournament Hub:\n" + shareUrl;
+            var shareText = "🏏 Watch All LIVE Cricket Matches on Cric-8 Live Tournament Hub: " + shareUrl;
 
             if (navigator.share) {
                 navigator.share({
                     title: "Cric-8 Live Tournament Hub",
-                    text: shareText,
+                    text: "🏏 Watch All LIVE Cricket Matches on Cric-8 Live Tournament Hub:",
                     url: shareUrl
                 }).catch(function(){});
             } else if (navigator.clipboard) {
-                navigator.clipboard.writeText(shareUrl).then(function() {
-                    alert("✅ Permanent Ground QR Link copied to clipboard!\n\nUse this URL for your Ground QR Code:\n" + shareUrl);
+                navigator.clipboard.writeText(shareText).then(function() {
+                    alert("✅ Permanent Ground QR Link copied to clipboard!");
                 });
             } else {
                 prompt("Copy this Ground QR Link:", shareUrl);
