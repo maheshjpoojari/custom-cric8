@@ -1138,7 +1138,7 @@
                 <div id="pairChangeText" style="color:var(--gold); font-size:0.8rem; font-weight:900; margin-bottom:8px;">PAIR ROTATION</div>
                 <div class="input-group">
                     <label>New Striker</label>
-                    <select id="nextStrikerSelect" class="input-field" onchange="window.filterSecondaryBatter()"></select>
+                    <select id="nextStrikerSelect" class="input-field" onchange="window.onNextStrikerChange(this)"></select>
                 </div>
                 <div class="input-group">
                     <label>New Non-Striker</label>
@@ -2610,10 +2610,10 @@
             d[scKey].totalWkts = d[teamKey].wkts;
 
             if (!Array.isArray(d.ball_timeline)) d.ball_timeline = [];
-            var totalLegalBalls = parseInt(d[teamKey].balls) || 0;
-            var overIdx = totalLegalBalls > 0 ? Math.floor((totalLegalBalls - 1) / 6) : 0;
-            var ballInOver = totalLegalBalls > 0 ? (((totalLegalBalls - 1) % 6) + 1) : 1;
-            var notation = overIdx + "." + ballInOver;
+            var slotBefore = currentBalls;
+            var overIdx = Math.floor(slotBefore / 6);
+            var ballInOver = (slotBefore % 6) + 1;
+            var notation = (overIdx + 1) + "." + ballInOver;
             var currentScoreAfter = d[teamKey].score + "/" + d[teamKey].wkts;
 
             d.ball_timeline.push({
@@ -2795,10 +2795,10 @@
                     d[scKey].batters[dismissedName].runs -= 5;
                 }
 
-                var totalBallsNow = parseInt(d[teamKey].balls) || 1;
-                var wktOverIdx = Math.floor((totalBallsNow - 1) / 6);
-                var wktBallInOver = ((totalBallsNow - 1) % 6) + 1;
-                var overNotation = wktOverIdx + "." + wktBallInOver;
+                var totalBallsNow = (parseInt(d[teamKey].balls) || 0) - (countsAsLegal ? 1 : 0);
+                var wktOverIdx = Math.floor(Math.max(0, totalBallsNow) / 6);
+                var wktBallInOver = (Math.max(0, totalBallsNow) % 6) + 1;
+                var overNotation = (wktOverIdx + 1) + "." + wktBallInOver;
                 var wktScoreAfter = d[teamKey].score + "/" + d[teamKey].wkts;
 
                 d[scKey].fow.push({
@@ -2884,7 +2884,15 @@
                 return !usedBatters.includes(p) && p !== d.crr_bat_name && p !== d.non_bat_name;
             });
 
+            var isFullNbSquad = fullSquad.length >= (parseInt(d.playersPerTeam) || 8);
             if (availableNext.length === 0) {
+                var nbScKey = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
+                var nbBatters = (d[nbScKey] && d[nbScKey].batters) ? d[nbScKey].batters : {};
+                availableNext = fullSquad.filter(function(p) {
+                    return p !== d.crr_bat_name && p !== d.non_bat_name && !(nbBatters[p] && nbBatters[p].dismissals > 0);
+                });
+            }
+            if (availableNext.length === 0 && !isFullNbSquad) {
                 var wCount = (parseInt(isTeamABatting ? d.tA.wkts : d.tB.wkts) || 1) + 2;
                 availableNext = [batTeamName + " Batter " + wCount];
             }
@@ -2977,6 +2985,7 @@
                     return !usedBatters.includes(p) && p !== d.crr_bat_name && p !== d.non_bat_name;
                 });
 
+                var isFullBatSquad = fullBatSquad.length >= (parseInt(d.playersPerTeam) || 8);
                 var candidatePool = [];
                 if (freshBatters.length >= 2) {
                     candidatePool = freshBatters.map(function(p) { return { name: p, label: p }; });
@@ -2984,14 +2993,16 @@
                     freshBatters.forEach(function(p) {
                         candidatePool.push({ name: p, label: p });
                     });
+                    var pairScBatters = (d[scKey] && d[scKey].batters) ? d[scKey].batters : {};
                     fullBatSquad.forEach(function(p) {
-                        if (!freshBatters.includes(p) && !rebatList.includes(p)) {
+                        var isOutAlready = pairScBatters[p] && pairScBatters[p].dismissals > 0;
+                        if (!freshBatters.includes(p) && !rebatList.includes(p) && !isOutAlready && p !== d.crr_bat_name && p !== d.non_bat_name) {
                             candidatePool.push({ name: p, label: p + " (Re-bat)" });
                         }
                     });
                 }
 
-                if (candidatePool.length < 2) {
+                if (candidatePool.length < 2 && !isFullBatSquad) {
                     candidatePool = [
                         { name: batTeamName + " Pair " + nextPairNum + "A", label: batTeamName + " Pair " + nextPairNum + "A" },
                         { name: batTeamName + " Pair " + nextPairNum + "B", label: batTeamName + " Pair " + nextPairNum + "B" }
@@ -3004,6 +3015,7 @@
                 activeAvailableBatters.forEach(function(item) {
                     sSel.add(new Option(item.label, item.name));
                 });
+                sSel.add(new Option("➕ Add New Player...", "__ADD_PLAYER__"));
                 window.filterSecondaryBatter();
             } else {
                 pairSection.classList.add('hidden');
@@ -3014,6 +3026,7 @@
             var scKeyBowl = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
             var doubleOverList = (d[scKeyBowl] && Array.isArray(d[scKeyBowl].double_over_bowlers)) ? d[scKeyBowl].double_over_bowlers : [];
 
+            var isFullFieldSquad = fullFieldSquad.length >= (parseInt(d.playersPerTeam) || 8);
             var freshBowlers = fullFieldSquad.filter(function(p) {
                 return !usedBowlers.includes(p) && p !== d.crr_bowl;
             });
@@ -3026,7 +3039,7 @@
             } else {
                 freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
                 fullFieldSquad.forEach(function(p) {
-                    if (p !== d.crr_bowl && !freshBowlers.includes(p) && (!isPairs || !doubleOverList.includes(p))) {
+                    if (freshBowlers.length === 0 && p !== d.crr_bowl && !freshBowlers.includes(p) && (!isPairs || !doubleOverList.includes(p))) {
                         var lbl = usedBowlers.includes(p) ? (p + " (2nd Over)") : p;
                         bSel.add(new Option(lbl, p));
                     }
@@ -3034,12 +3047,23 @@
             }
 
             if (bSel.options.length === 0) {
-                fullFieldSquad.forEach(function(p) { bSel.add(new Option(p, p)); });
+                fullFieldSquad.forEach(function(p) { if (p !== d.crr_bowl) bSel.add(new Option(p, p)); });
             }
             bSel.add(new Option("➕ Add New Player...", "__ADD_PLAYER__"));
 
             setText('nextBowlerTeamLabel', "Select Bowler (" + fieldTeamName + ") — Over " + (completedOvers + 1) + " of " + totalOvers);
             document.getElementById('bowlerModal').classList.remove('hidden');
+        };
+
+        window.onNextStrikerChange = function(selEl) {
+            if (selEl.value === "__ADD_PLAYER__") {
+                window.handleInlineAddPlayer(selEl, 'bat');
+                var added = selEl.value;
+                if (added && added !== "__ADD_PLAYER__" && !activeAvailableBatters.some(function(x) { return x.name === added; })) {
+                    activeAvailableBatters.push({ name: added, label: added });
+                }
+            }
+            window.filterSecondaryBatter();
         };
 
         window.filterSecondaryBatter = function() {
@@ -3088,6 +3112,7 @@
             if (isPairsFormat(d) && isPairSectionOpen) {
                 var newS = document.getElementById('nextStrikerSelect').value;
                 var newNS = document.getElementById('nextNonStrikerSelect').value;
+                if (newS === "__ADD_PLAYER__" || newNS === "__ADD_PLAYER__") return alert("Enter the referee's player name for the new pair first.");
                 if (!newS || !newNS || newS === newNS) return alert("Please select two distinct batters for the new pair.");
 
                 if (d.used_batsmen.includes(newS) && !d[scKey].rebat_players.includes(newS)) {
@@ -3134,9 +3159,11 @@
             var completedOvers = Math.floor(currentBalls / 6);
             var activeOverIndex = (d.curr_over && d.curr_over.length > 0 && currentBalls > 0 && currentBalls % 6 === 0) ? (completedOvers - 1) : completedOvers;
             var overFinished = isCurrentOverComplete(d.curr_over, isPairs, activeOverIndex, totalOvers);
+            var pendingExtraOnTop = Array.isArray(d.curr_over) && d.curr_over.some(function(b) { return String(b).indexOf('OT:') === 0; });
+            var lastBallDone = (currentBalls >= maxBalls) && (overFinished || !pendingExtraOnTop);
 
             if (d.inn === 1) {
-                var inn1Done = (currentBalls >= maxBalls && overFinished) || forceAllOut;
+                var inn1Done = (lastBallDone) || forceAllOut;
                 if (inn1Done) {
                     syncMatchState(d);
                     window.openInningsBreakModal(d, currentTeamKey, oppTeamKey);
@@ -3150,7 +3177,7 @@
                     matchFinished = true;
                     var wktsRemaining = Math.max(1, (parseInt(d.playersPerTeam) || 8) - 1 - (parseInt(d[currentTeamKey].wkts) || 0));
                     winnerBanner = "🎉 " + d[currentTeamKey].name + " WON by " + wktsRemaining + " wicket" + (wktsRemaining > 1 ? "s" : "") + "!";
-                } else if ((currentBalls >= maxBalls && overFinished) || forceAllOut) {
+                } else if (lastBallDone || forceAllOut) {
                     matchFinished = true;
                     if (currentScore >= target) {
                         var marginRuns = currentScore - (target - 1);
