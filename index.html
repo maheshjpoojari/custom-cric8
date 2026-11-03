@@ -136,13 +136,13 @@
                     <option value="pitch_4">Pitch 4 (Practice Turf)</option>
                 </select>
             </div>
+            <!-- SINGLE CLEAN LIVE MATCHES HUB BUTTON -->
             <button class="btn btn-red btn-block" onclick="window.openLiveHubView()">🔴 LIVE MATCHES (GROUND QR HUB)</button>
             <button class="btn btn-blue btn-block" onclick="window.startHostFlow()">⚡ SCORE A QUICK MATCH</button>
             <button class="btn btn-green btn-block" onclick="window.resumeLiveMatchOnSlot()">▶️ RESUME LIVE MATCH ON PITCH</button>
             <button class="btn btn-orange btn-block" onclick="window.openFixturesView()">📅 FIXTURES & TOURNAMENT HUB</button>
             <button class="btn btn-purple btn-block" onclick="window.openStandingsView()">📊 VIEW STANDINGS & LEADERBOARD</button>
             <button class="btn btn-gold btn-block" onclick="window.openHistoryView()">📜 MATCH ARCHIVE & RESULTS</button>
-            <button class="btn btn-slate btn-block" onclick="window.enterAsGuest()">👁️ SPECTATOR / LIVE MATCH VIEW</button>
             <button class="btn btn-block" style="background:#1e293b; font-size:0.78rem; color:#94a3b8;" onclick="window.navigateView('viewLogin')">🔐 REFEREE / ADMIN LOGIN</button>
         </div>
     </div>
@@ -151,7 +151,7 @@
     <div id="viewLiveHub" class="app-view hidden">
         <div class="view-card">
             <h2 class="view-title">🔴 CURRENTLY LIVE MATCHES</h2>
-            <p style="text-align:center; font-size:0.78rem; color:#94a3b8; margin-top:-8px; margin-bottom:14px;">Select any live pitch below to view scores instantly:</p>
+            <p style="text-align:center; font-size:0.78rem; color:#94a3b8; margin-top:-8px; margin-bottom:14px;">Select any live match below to view scores instantly:</p>
             
             <div id="liveHubContainer">
                 <div style="text-align:center; padding:20px; color:#64748b;">Scanning active pitches...</div>
@@ -1068,9 +1068,9 @@
                     impactBtn.classList.add('hidden');
                 } else {
                     impactBtn.classList.remove('hidden');
-                    var isOver7Finished = (d.inn === 1) && (completedOvers === (totalOvers - 1)) && isOverComplete;
+                    var isOver7Completed = (d.inn === 1) && (completedOvers === (totalOvers - 1)) && isOverComplete;
                     var bothUsed = d.impactUsed && d.impactUsed.tA && d.impactUsed.tB;
-                    var canImpact = isOver7Finished && !bothUsed;
+                    var canImpact = isOver7Completed && !bothUsed;
                     impactBtn.disabled = !canImpact;
                     impactBtn.classList.toggle('btn-disabled', !canImpact);
                     impactBtn.style.background = canImpact ? "var(--purple)" : "#334155";
@@ -2171,9 +2171,9 @@
         };
 
         window.shareLiveMatchLink = function() {
-            var shareUrl = window.location.origin + window.location.pathname + "?view=live&match=" + encodeURIComponent(currentMatchId);
+            var shareUrl = window.location.origin + window.location.pathname + "?view=hub";
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(shareUrl).then(function() { alert("✅ Live Link copied to clipboard!"); });
+                navigator.clipboard.writeText(shareUrl).then(function() { alert("✅ Ground QR Hub Link copied to clipboard!"); });
             } else {
                 prompt("Copy Link:", shareUrl);
             }
