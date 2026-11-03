@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cric-8 Arena — Official Tournament & Live Scoring Console</title>
+    <title>Custom Cric-8 Arena — Official Tournament & Live Scoring Console</title>
     <!-- Firebase Compat SDKs (Synchronous & Mobile-Safe) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -646,7 +646,7 @@
          ========================================== -->
     <div id="viewHome" class="app-view">
         <div class="view-card">
-            <h2 class="view-title">🏏 CRIC-8 ARENA CONSOLE</h2>
+            <h2 class="view-title">🏏 CUSTOM CRIC-8 ARENA CONSOLE</h2>
 
             <button class="btn btn-red btn-block" onclick="window.openLiveHubView()">🔴 LIVE MATCHES (GROUND QR HUB)</button>
             <button class="btn btn-blue btn-block" onclick="window.startHostFlow()">⚡ SCORE A QUICK MATCH</button>
@@ -3895,52 +3895,6 @@ window.switchStandingsTab = function(tab) {
                 bHtml += '</table>';
                 box.innerHTML = bHtml;
             } else if (tab === 'purple') {
-                var bowlMap = {};
-                matches.forEach(function(m) {
-                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
-                        var sc = m[k];
-                        if (!sc || !sc.bowlers) return;
-                        for (var p in sc.bowlers) {
-                            if (!bowlMap[p]) bowlMap[p] = { wkts: 0, runs: 0, balls: 0 };
-                            bowlMap[p].wkts += (sc.bowlers[p].wkts || 0);
-                            bowlMap[p].runs += (sc.bowlers[p].runs || 0);
-                            bowlMap[p].balls += (sc.bowlers[p].balls || 0);
-                        }
-                    });
-                });
-                var bwList = Object.keys(bowlMap).map(function(k) { return Object.assign({ name: k }, bowlMap[k]); })
-                    .sort(function(a, b) { return b.wkts - a.wkts || a.runs - b.runs; }).slice(0, 10);
-                var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr>';
-                bwList.forEach(function(r) {
-                    bwHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + r.runs + '</td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td></tr>';
-                });
-                bwHtml += '</table>';
-                box.innerHTML = bwHtml;
-            } else {
-                var fldMap = {};
-                matches.forEach(function(m) {
-                    ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
-                        var sc = m[k];
-                        if (!sc || !sc.fielders) return;
-                        for (var p in sc.fielders) {
-                            if (!fldMap[p]) fldMap[p] = { catches: 0, runOuts: 0, total: 0 };
-                            fldMap[p].catches += (sc.fielders[p].catches || 0);
-                            fldMap[p].runOuts += (sc.fielders[p].runOuts || 0);
-                            fldMap[p].total += (sc.fielders[p].catches || 0) + (sc.fielders[p].runOuts || 0);
-                        }
-                    });
-                });
-                var fList = Object.keys(fldMap).map(function(k) { return Object.assign({ name: k }, fldMap[k]); })
-                    .sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
-                var fHtml = '<table class="sc-table"><tr><th>Fielder</th><th>Catches</th><th>Run Outs</th><th>Total</th></tr>';
-                fList.forEach(function(r) {
-                    fHtml += '<tr><td><b>' + r.name + '</b></td><td>' + r.catches + '</td><td>' + r.runOuts + '</td><td style="color:var(--green); font-weight:900;">' + r.total + '</td></tr>';
-                });
-                fHtml += '</table>';
-                box.innerHTML = fHtml;
-            }
-        };
-        else if (tab === 'purple') {
                 var bowlMap = {};
                 matches.forEach(function(m) {
                     ['inn1_scorecard', 'inn2_scorecard'].forEach(function(k) {
