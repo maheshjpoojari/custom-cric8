@@ -3707,13 +3707,13 @@
 
 function drawFixturesList(box) {
             var filterEl = document.getElementById('fixtureTourneyFilter');
-            var filter = filterEl ? filterEl.value : 'icl_2026';
+            var filter = filterEl ? filterEl.value : 'FZ_ICL_2026';
             
             var list = scheduledFixturesList.filter(function(f) {
                 if (filter === 'all') return true;
-                var fTourney = (f.tournament || 'icl_2026');
+                var fTourney = (f.tournament || 'FZ_ICL_2026');
                 // Allow flexible matching for ICL
-                if (filter === 'icl_2026' && (fTourney === 'icl_2026' || fTourney === 'icl')) return true;
+                if (filter === 'FZ_ICL_2026' && (fTourney === 'icl_2026' || fTourney === 'icl')) return true;
                 return fTourney === filter;
             });
 
