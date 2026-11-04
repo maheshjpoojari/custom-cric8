@@ -644,7 +644,7 @@
     <!-- ==========================================
          VIEW 1: MAIN HOME HUB (HOST CONSOLE)
          ========================================== -->
-    <div id="viewAdmin" class="app-view">
+    <div id="viewAdmin" class="app-view hidden">
         <div class="view-card">
             <h2 class="view-title">🛡️ TOURNAMENT ADMIN</h2>
             <p style="color:#94a3b8; font-size:0.8rem; margin-bottom:12px;">Superuser only. Reset changes standings, NRR and caps only. Live matches are not affected.</p>
@@ -1282,6 +1282,7 @@
         }
         var db = firebase.firestore();
         var auth = firebase.auth();
+        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function() {});
 
         // --- 2. OFFICIAL FLYDUBAI ICL 2026 MASTER ROSTERS (14 TEAMS, 188 PLAYERS) ---
         var DEFAULT_TEAMS = {
@@ -1460,13 +1461,17 @@
                 viewId = 'viewLiveHub';
             }
 
-            var views = ['viewHome', 'viewLiveHub', 'viewLogin', 'viewFixtures', 'viewStandings', 'viewHistory', 'viewTournament', 'viewToss', 'viewScorer'];
+            if (viewId === 'viewAdmin' && !window.isSuperUser()) {
+                viewId = 'viewHome';
+            }
+            var views = ['viewHome', 'viewLiveHub', 'viewLogin', 'viewFixtures', 'viewStandings', 'viewHistory', 'viewTournament', 'viewToss', 'viewScorer', 'viewAdmin'];
             views.forEach(function(id) {
                 var el = document.getElementById(id);
                 if (el) el.classList.add('hidden');
             });
             var target = document.getElementById(viewId);
             if (target) target.classList.remove('hidden');
+            if (viewId === 'viewAdmin' && window.loadAdminStatus) window.loadAdminStatus();
 
             syncSpectatorNavigationUI();
 
@@ -4000,6 +4005,9 @@ function drawFixturesList(box) {
         window.openSuperAdmin = function() {
             if (!window.isSuperUser()) return alert("Superuser login required.");
             window.navigateView('viewAdmin');
+        };
+
+        window.loadAdminStatus = function() {
             var statusEl = document.getElementById('adminStatus');
             if (statusEl) statusEl.innerText = "Loading...";
             db.collection("match_history").get().then(function(snap) {
@@ -4409,7 +4417,13 @@ window.shareLiveMatchLink = function() {
                 return r;
             };
         })();
-        auth.onAuthStateChanged(function() { window.refreshAdminVisibility(); });
+        auth.onAuthStateChanged(function() {
+            window.refreshAdminVisibility();
+            var adm = document.getElementById('viewAdmin');
+            if (!window.isSuperUser() && adm && !adm.classList.contains('hidden')) {
+                window.navigateView('viewHome');
+            }
+        });
 
         window.openSuperLogin = function() {
             if (window.isSuperUser()) {
