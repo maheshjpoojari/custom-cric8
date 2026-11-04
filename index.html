@@ -789,6 +789,7 @@
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
             <button class="btn btn-red btn-block" style="margin-top:12px;" onclick="window.resetStandingsForTournament()">♻️ RESET STANDINGS FOR SELECTED TOURNAMENT</button>
+            <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.undoStandingsReset()">↩️ UNDO LAST RESET</button>
             <button class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -832,7 +833,7 @@
                 </div>
                 <div class="input-group">
                     <label>League / Event</label>
-                    <select id="selectTournament" class="input-field">
+                    <select id="selectTournament" class="input-field" onchange="window.applyFormatForTournament(); window.onFormatSelectChange();">
                         <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
                         <option value="corporate">Corporate Cric-8 Cup</option>
                         <option value="premier">Weekend Premier League</option>
@@ -939,7 +940,7 @@
         <div class="header">
             <div id="teamNameDisp">Team 1 (Inn 1)</div>
             <div id="pairBadgeDisp" class="pair-badge">Pair 1 (Overs 1-2)</div>
-            <div id="bowlNameDisp">Bowler: TBD</div>
+            <div id="bowlNameDisp" onclick="window.editBowler()" style="cursor:pointer;">Bowler: TBD</div>
         </div>
 
         <div class="player-bar">
@@ -1702,6 +1703,23 @@
         };
 
         // --- 6. TOURNAMENT & 3-FORMAT SETUP ---
+        window.applyFormatForTournament = function() {
+            var tEl = document.getElementById('selectTournament');
+            var fEl = document.getElementById('rulesFormatSelect');
+            if (!tEl || !fEl) return;
+            if (tEl.value === 'FZ_ICL_2026') {
+                fEl.innerHTML = '';
+                fEl.add(new Option('Custom Cric-8 Pairs (8 Overs, -5 Wkt, 3-Dot -5, 2-Run Extras)', 'pairs'));
+                fEl.value = 'pairs';
+            } else if (fEl.options.length < 3) {
+                fEl.innerHTML = '';
+                fEl.add(new Option('Custom Cric-8 Pairs (8 Overs, -5 Wkt, 3-Dot -5, 2-Run Extras)', 'pairs'));
+                fEl.add(new Option('Pairs Practice / Custom Overs (Custom Overs, Pairs Rules)', 'pairs_practice'));
+                fEl.add(new Option('Classic Cricket Format (1-Run Extras, Out on Wicket)', 'classic'));
+                fEl.value = 'pairs';
+            }
+        };
+
         window.onFormatSelectChange = function() {
             var fmt = document.getElementById('rulesFormatSelect').value;
             var oversInp = document.getElementById('matchOversInput');
@@ -1719,6 +1737,7 @@
             var t2 = document.getElementById('selectTeam2');
             var s1 = document.getElementById('schedTeam1');
             var s2 = document.getElementById('schedTeam2');
+            window.applyFormatForTournament();
             var names = Object.keys(uploadedTeams);
 
             if (t1 && t2) {
@@ -3493,24 +3512,90 @@
             window.navigateView('viewTournament');
         };
 
+        window.getBattingSideInfo = function(d) {
+            var isA = (d.tossWinner === 'tA') ? (d.tossDecision === 'bat') : (d.tossDecision === 'bowl');
+            if (d.inn === 2) isA = !isA;
+            return { isA: isA, batTeam: isA ? d.tA.name : d.tB.name, bowlTeam: isA ? d.tB.name : d.tA.name };
+        };
+
+        window.openPlayerPicker = function(title, names, current, onPick) {
+            if (!names || names.length === 0) return alert("No eligible players in the playing squad.");
+            var ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+            var box = document.createElement('div');
+            box.style.cssText = 'background:#0f172a;border:1px solid #334155;border-radius:14px;padding:18px;width:100%;max-width:340px;';
+            var h = document.createElement('div');
+            h.textContent = title;
+            h.style.cssText = 'color:#38bdf8;font-weight:900;margin-bottom:12px;';
+            var sel = document.createElement('select');
+            sel.className = 'input-field';
+            sel.style.width = '100%';
+            names.forEach(function(n) { var o = new Option(n, n); if (n === current) o.selected = true; sel.add(o); });
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex; gap:10px; margin-top:14px;';
+            var ok = document.createElement('button');
+            ok.textContent = 'CONFIRM';
+            ok.className = 'btn btn-green';
+            ok.style.flex = '1';
+            var cancel = document.createElement('button');
+            cancel.textContent = 'CANCEL';
+            cancel.className = 'btn btn-slate';
+            cancel.style.flex = '1';
+            ok.onclick = function() {
+                var v = sel.value;
+                document.body.removeChild(ov);
+                if (v && v !== current) onPick(v);
+            };
+            cancel.onclick = function() { document.body.removeChild(ov); };
+            row.appendChild(ok);
+            row.appendChild(cancel);
+            box.appendChild(h);
+            box.appendChild(sel);
+            box.appendChild(row);
+            ov.appendChild(box);
+            document.body.appendChild(ov);
+        };
+
         window.editStriker = function() {
             if (!isScoringAuthorized || !matchData) return;
-            var name = prompt("Edit Striker Name:", matchData.crr_bat_name || "");
-            if (name && name.trim()) {
+            var d0 = matchData;
+            var info = window.getBattingSideInfo(d0);
+            var sq = getActivePlayingSquad(info.batTeam, d0, info.isA);
+            var sc = d0[d0.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'];
+            var outs = (sc && sc.batters) ? sc.batters : {};
+            var opts = sq.filter(function(p) { return p !== d0.non_bat_name && !(outs[p] && outs[p].dismissals > 0); });
+            window.openPlayerPicker("Select Striker", opts, d0.crr_bat_name, function(name) {
                 var d = JSON.parse(JSON.stringify(matchData));
-                d.crr_bat_name = name.trim();
+                d.crr_bat_name = name;
                 syncMatchState(d);
-            }
+            });
         };
 
         window.editNonStriker = function() {
             if (!isScoringAuthorized || !matchData) return;
-            var name = prompt("Edit Non-Striker Name:", matchData.non_bat_name || "");
-            if (name && name.trim()) {
+            var d0 = matchData;
+            var info = window.getBattingSideInfo(d0);
+            var sq = getActivePlayingSquad(info.batTeam, d0, info.isA);
+            var sc = d0[d0.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'];
+            var outs = (sc && sc.batters) ? sc.batters : {};
+            var opts = sq.filter(function(p) { return p !== d0.crr_bat_name && !(outs[p] && outs[p].dismissals > 0); });
+            window.openPlayerPicker("Select Non-Striker", opts, d0.non_bat_name, function(name) {
                 var d = JSON.parse(JSON.stringify(matchData));
-                d.non_bat_name = name.trim();
+                d.non_bat_name = name;
                 syncMatchState(d);
-            }
+            });
+        };
+
+        window.editBowler = function() {
+            if (!isScoringAuthorized || !matchData) return;
+            var d0 = matchData;
+            var info = window.getBattingSideInfo(d0);
+            var sq = getActivePlayingSquad(info.bowlTeam, d0, !info.isA);
+            window.openPlayerPicker("Select Bowler", sq, d0.crr_bowl, function(name) {
+                var d = JSON.parse(JSON.stringify(matchData));
+                d.crr_bowl = name;
+                syncMatchState(d);
+            });
         };
 
         // --- 17. OFFICIAL SCORECARD, MVP & BALL-BY-BALL TIMELINE ---
@@ -3847,7 +3932,7 @@ function drawFixturesList(box) {
 
             db.collection("match_history").get().then(function(snap) {
                 var arr = [];
-                snap.forEach(function(docSnap) { arr.push(docSnap.data()); });
+                snap.forEach(function(docSnap) { var x = docSnap.data(); if (!x.reset_marker) arr.push(x); });
                 archivedMatchesCache = arr.filter(function(m) {
                     if (filter === 'all') return true;
                     return m.tournament === filter;
@@ -3886,14 +3971,29 @@ function drawFixturesList(box) {
 
         window.standingsResetAt = window.standingsResetAt || {};
 
+        window.computeResetCutoffs = function(markers) {
+            var undone = {};
+            markers.forEach(function(m) { if (m.type === 'undo' && m.target) undone[m.target] = true; });
+            var cut = {};
+            markers.forEach(function(m) {
+                if (m.type !== 'reset' || undone[m.__id]) return;
+                if (!cut[m.tournament] || m.at > cut[m.tournament]) cut[m.tournament] = m.at;
+            });
+            return cut;
+        };
+
         window.openStandingsView = function() {
             window.navigateView('viewStandings');
-            db.collection("settings").doc("standings_reset").get().then(function(doc) {
-                window.standingsResetAt = doc.exists ? (doc.data() || {}) : {};
-                return db.collection("match_history").get();
-            }).then(function(snap) {
+            db.collection("match_history").get().then(function(snap) {
                 var arr = [];
-                snap.forEach(function(d) { arr.push(d.data()); });
+                var markers = [];
+                snap.forEach(function(d) {
+                    var x = d.data();
+                    if (x.reset_marker) { x.__id = d.id; markers.push(x); }
+                    else { arr.push(x); }
+                });
+                window.standingsMarkers = markers;
+                window.standingsResetAt = window.computeResetCutoffs(markers);
                 archivedMatchesCache = arr;
                 window.switchStandingsTab('points');
             }).catch(function() {
@@ -3906,17 +4006,36 @@ function drawFixturesList(box) {
             var filterEl = document.getElementById('standingsTourneyFilter');
             var t = filterEl ? filterEl.value : '';
             if (!t) return;
-            if (!confirm("Reset the standings for this tournament? Past matches stay archived but will no longer count in the points table, NRR or caps.")) return;
-            var cutoffs = Object.assign({}, window.standingsResetAt || {});
-            cutoffs[t] = new Date().toISOString();
-            db.collection("settings").doc("standings_reset").set(cutoffs).then(function() {
-                window.standingsResetAt = cutoffs;
-                window.switchStandingsTab(window.activeStandingsTab || 'points');
+            if (!confirm("Reset the standings for this tournament? Past matches stay archived and can be restored with UNDO LAST RESET.")) return;
+            var id = "reset_" + t + "_" + Date.now();
+            db.collection("match_history").doc(id).set({ reset_marker: true, type: 'reset', tournament: t, at: new Date().toISOString() }).then(function() {
                 alert("✅ Standings reset for this tournament.");
+                window.openStandingsView();
             }).catch(function(e) {
                 alert("Reset failed: " + (e && e.message ? e.message : e));
             });
         };
+
+        window.undoStandingsReset = function() {
+            if (!isScoringAuthorized) return alert("Only the scorer can undo a reset.");
+            var filterEl = document.getElementById('standingsTourneyFilter');
+            var t = filterEl ? filterEl.value : '';
+            var markers = window.standingsMarkers || [];
+            var undone = {};
+            markers.forEach(function(m) { if (m.type === 'undo' && m.target) undone[m.target] = true; });
+            var active = markers.filter(function(m) { return m.type === 'reset' && m.tournament === t && !undone[m.__id]; });
+            if (active.length === 0) return alert("There is no reset to undo for this tournament.");
+            active.sort(function(a, b) { return a.at < b.at ? 1 : -1; });
+            if (!confirm("Undo the last reset made on " + new Date(active[0].at).toLocaleString() + "? Matches from before that reset will count again.")) return;
+            var id = "undo_" + t + "_" + Date.now();
+            db.collection("match_history").doc(id).set({ reset_marker: true, type: 'undo', target: active[0].__id, tournament: t, at: new Date().toISOString() }).then(function() {
+                alert("✅ Reset undone.");
+                window.openStandingsView();
+            }).catch(function(e) {
+                alert("Undo failed: " + (e && e.message ? e.message : e));
+            });
+        };
+
 window.switchStandingsTab = function(tab) {
             var tourneyEl = document.getElementById('standingsTourneyFilter');
             var currentTourney = tourneyEl ? tourneyEl.value : 'FZ_ICL_2026';
@@ -4051,18 +4170,20 @@ window.switchStandingsTab = function(tab) {
                         var sc = m[k];
                         if (!sc || !sc.batters) return;
                         for (var p in sc.batters) {
-                            if (!batMap[p]) batMap[p] = { runs: 0, balls: 0, sixes: 0 };
+                            if (!batMap[p]) batMap[p] = { runs: 0, balls: 0, fours: 0, sixes: 0 };
                             batMap[p].runs += (sc.batters[p].runs || 0);
                             batMap[p].balls += (sc.batters[p].balls || 0);
+                            batMap[p].fours += (sc.batters[p].fours || 0);
                             batMap[p].sixes += (sc.batters[p].sixes || 0);
                         }
                     });
                 });
                 var bList = Object.keys(batMap).map(function(k) { return Object.assign({ name: k }, batMap[k]); })
                     .sort(function(a, b) { return b.runs - a.runs; }).slice(0, 10);
-                var bHtml = '<table class="sc-table"><tr><th>Batter</th><th>Runs</th><th>Balls</th><th>6s</th></tr>';
+                var bHtml = '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>';
                 bList.forEach(function(r) {
-                    bHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--orange); font-weight:900;">' + r.runs + '</td><td>' + r.balls + '</td><td>' + r.sixes + '</td></tr>';
+                    var sr = r.balls > 0 ? (r.runs / r.balls * 100) : 0;
+                    bHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--orange); font-weight:900;">' + r.runs + '</td><td>' + r.balls + '</td><td>' + r.fours + '</td><td>' + r.sixes + '</td><td>' + sr.toFixed(1) + '</td></tr>';
                 });
                 bHtml += '</table>';
                 box.innerHTML = bHtml;
@@ -4082,9 +4203,10 @@ window.switchStandingsTab = function(tab) {
                 });
                 var bwList = Object.keys(bowlMap).map(function(k) { return Object.assign({ name: k }, bowlMap[k]); })
                     .sort(function(a, b) { return b.wkts - a.wkts || a.runs - b.runs; }).slice(0, 10);
-                var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>Wkts</th><th>Runs</th><th>Overs</th></tr>';
+                var bwHtml = '<table class="sc-table"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>ER</th></tr>';
                 bwList.forEach(function(r) {
-                    bwHtml += '<tr><td><b>' + r.name + '</b></td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + r.runs + '</td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td></tr>';
+                    var er = r.balls > 0 ? (r.runs / (r.balls / 6)) : 0;
+                    bwHtml += '<tr><td><b>' + r.name + '</b></td><td>' + Math.floor(r.balls / 6) + '.' + (r.balls % 6) + '</td><td>' + r.runs + '</td><td style="color:var(--purple); font-weight:900;">' + r.wkts + '</td><td>' + er.toFixed(2) + '</td></tr>';
                 });
                 bwHtml += '</table>';
                 box.innerHTML = bwHtml;
