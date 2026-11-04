@@ -644,6 +644,27 @@
     <!-- ==========================================
          VIEW 1: MAIN HOME HUB (HOST CONSOLE)
          ========================================== -->
+    <div id="viewAdmin" class="app-view">
+        <div class="view-card">
+            <h2 class="view-title">🛡️ TOURNAMENT ADMIN</h2>
+            <p style="color:#94a3b8; font-size:0.8rem; margin-bottom:12px;">Superuser only. Reset changes standings, NRR and caps only. Live matches are not affected.</p>
+
+            <label>Tournament</label>
+            <select id="adminTourneySelect" class="input-field" onchange="window.refreshAdminStatus()">
+                <option value="FZ_ICL_2026">FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                <option value="corporate">Corporate Cric-8 Cup</option>
+                <option value="premier">Weekend Premier League</option>
+                <option value="friendly">Friendly / Exhibition</option>
+            </select>
+
+            <div id="adminStatus" style="margin:14px 0; color:#e2e8f0; font-size:0.85rem;">Loading...</div>
+
+            <button class="btn btn-red btn-block" onclick="window.resetStandingsForTournament()">♻️ RESET STANDINGS</button>
+            <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.undoStandingsReset()">↩️ UNDO LAST RESET</button>
+            <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
+        </div>
+    </div>
+
     <div id="viewHome" class="app-view">
         <div class="view-card">
             <h2 class="view-title">🏏 CRIC-8 ARENA CONSOLE</h2>
@@ -654,6 +675,7 @@
             <button class="btn btn-orange btn-block" onclick="window.openFixturesView()">📅 FIXTURES & TOURNAMENT HUB</button>
             <button class="btn btn-purple btn-block" onclick="window.openStandingsView()">📊 VIEW STANDINGS & LEADERBOARD</button>
             <button class="btn btn-gold btn-block" onclick="window.openHistoryView()">📜 MATCH ARCHIVE & RESULTS</button>
+            <button id="adminHomeBtn" class="btn btn-red btn-block" style="display:none;" onclick="window.openSuperAdmin()">🛡️ TOURNAMENT ADMIN (SUPERUSER)</button>
             <button class="btn btn-block" style="background:#1e293b; font-size:0.78rem; color:#94a3b8;" onclick="window.navigateView('viewLogin')">🔐 REFEREE / ADMIN LOGIN</button>
         </div>
     </div>
@@ -788,8 +810,6 @@
                 <button class="tab-btn" id="stdTabFielding" onclick="window.switchStandingsTab('fielding')">🧤 Fielding</button>
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
-            <button id="resetStdBtn" class="btn btn-red btn-block" style="margin-top:12px; display:none;" onclick="window.resetStandingsForTournament()">♻️ RESET STANDINGS FOR SELECTED TOURNAMENT</button>
-            <button id="undoStdBtn" class="btn btn-slate btn-block" style="margin-top:8px; display:none;" onclick="window.undoStandingsReset()">↩️ UNDO LAST RESET</button>
             <button class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -3972,10 +3992,44 @@ function drawFixturesList(box) {
         window.standingsResetAt = window.standingsResetAt || {};
 
         // Only these accounts can reset or undo standings. Replace with your two superuser emails.
-        var SUPERUSER_EMAILS = ['superuser1@customcric8.com', 'superuser2@customcric8.com'];
+        var SUPERUSER_EMAILS = ['superuser1@example.com', 'superuser2@example.com'];
         window.isSuperUser = function() {
             var u = auth.currentUser;
             return !!(u && u.email && SUPERUSER_EMAILS.indexOf(u.email.toLowerCase()) !== -1);
+        };
+
+        window.openSuperAdmin = function() {
+            if (!window.isSuperUser()) return alert("Superuser login required.");
+            window.navigateView('viewAdmin');
+            var statusEl = document.getElementById('adminStatus');
+            if (statusEl) statusEl.innerText = "Loading...";
+            db.collection("match_history").get().then(function(snap) {
+                var markers = [];
+                snap.forEach(function(d) {
+                    var x = d.data();
+                    if (x.reset_marker) { x.__id = d.id; markers.push(x); }
+                });
+                window.standingsMarkers = markers;
+                window.standingsResetAt = window.computeResetCutoffs(markers);
+                window.refreshAdminStatus();
+            }).catch(function(e) {
+                if (statusEl) statusEl.innerText = "Could not load reset status: " + (e && e.message ? e.message : e);
+            });
+        };
+
+        window.refreshAdminStatus = function() {
+            var sel = document.getElementById('adminTourneySelect');
+            var statusEl = document.getElementById('adminStatus');
+            if (!sel || !statusEl) return;
+            var cut = (window.standingsResetAt || {})[sel.value];
+            statusEl.innerText = cut
+                ? "A reset is active since " + new Date(cut).toLocaleString() + ". Matches completed before that time are hidden from standings."
+                : "No reset is active. All completed matches count in standings.";
+        };
+
+        window.refreshAdminVisibility = function() {
+            var btn = document.getElementById('adminHomeBtn');
+            if (btn) btn.style.display = window.isSuperUser() ? '' : 'none';
         };
 
         window.computeResetCutoffs = function(markers) {
@@ -4000,10 +4054,6 @@ function drawFixturesList(box) {
                     else { arr.push(x); }
                 });
                 window.standingsMarkers = markers;
-                ['resetStdBtn', 'undoStdBtn'].forEach(function(id) {
-                    var el = document.getElementById(id);
-                    if (el) el.style.display = window.isSuperUser() ? '' : 'none';
-                });
                 window.standingsResetAt = window.computeResetCutoffs(markers);
                 archivedMatchesCache = arr;
                 window.switchStandingsTab('points');
@@ -4014,14 +4064,14 @@ function drawFixturesList(box) {
 
         window.resetStandingsForTournament = function() {
             if (!window.isSuperUser()) return alert("Only the tournament superusers can reset standings.");
-            var filterEl = document.getElementById('standingsTourneyFilter');
+            var filterEl = document.getElementById('adminTourneySelect');
             var t = filterEl ? filterEl.value : '';
             if (!t) return;
             if (!confirm("Reset the standings for this tournament? Past matches stay archived and can be restored with UNDO LAST RESET.")) return;
             var id = "reset_" + t + "_" + Date.now();
             db.collection("match_history").doc(id).set({ reset_marker: true, type: 'reset', tournament: t, at: new Date().toISOString() }).then(function() {
                 alert("✅ Standings reset for this tournament.");
-                window.openStandingsView();
+                window.openSuperAdmin();
             }).catch(function(e) {
                 alert("Reset failed: " + (e && e.message ? e.message : e));
             });
@@ -4029,7 +4079,7 @@ function drawFixturesList(box) {
 
         window.undoStandingsReset = function() {
             if (!window.isSuperUser()) return alert("Only the tournament superusers can undo a reset.");
-            var filterEl = document.getElementById('standingsTourneyFilter');
+            var filterEl = document.getElementById('adminTourneySelect');
             var t = filterEl ? filterEl.value : '';
             var markers = window.standingsMarkers || [];
             var undone = {};
@@ -4041,7 +4091,7 @@ function drawFixturesList(box) {
             var id = "undo_" + t + "_" + Date.now();
             db.collection("match_history").doc(id).set({ reset_marker: true, type: 'undo', target: active[0].__id, tournament: t, at: new Date().toISOString() }).then(function() {
                 alert("✅ Reset undone.");
-                window.openStandingsView();
+                window.openSuperAdmin();
             }).catch(function(e) {
                 alert("Undo failed: " + (e && e.message ? e.message : e));
             });
@@ -4352,6 +4402,16 @@ window.shareLiveMatchLink = function() {
         loadTeamsFromDatabase().then(function() {
             window.setupTournamentDropdowns();
         });
+        (function() {
+            var origNav = window.navigateView;
+            window.navigateView = function() {
+                var r = origNav.apply(this, arguments);
+                window.refreshAdminVisibility();
+                return r;
+            };
+        })();
+        auth.onAuthStateChanged(function() { window.refreshAdminVisibility(); });
+
     </script>
 </body>
 </html>
