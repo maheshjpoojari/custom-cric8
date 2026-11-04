@@ -4000,7 +4000,7 @@ function drawFixturesList(box) {
         window.standingsResetAt = window.standingsResetAt || {};
 
         // Only these accounts can reset or undo standings. Replace with your two superuser emails.
-        var SUPERUSER_EMAILS = ['superuser1@example.com', 'superuser2@example.com'];
+        var SUPERUSER_EMAILS = ['superuser1@customcric8.com', 'superuser2@customcric8.com'];
         window.isSuperUser = function() {
             var u = auth.currentUser;
             return !!(u && u.email && SUPERUSER_EMAILS.indexOf(u.email.toLowerCase()) !== -1);
