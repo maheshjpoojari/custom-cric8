@@ -661,6 +661,7 @@
 
             <button class="btn btn-red btn-block" onclick="window.resetStandingsForTournament()">♻️ RESET STANDINGS</button>
             <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.undoStandingsReset()">↩️ UNDO LAST RESET</button>
+            <button class="btn btn-gold btn-block" style="margin-top:8px;" onclick="window.syncRostersOnly()">☁️ UPDATE TEAM SQUADS FROM CODE</button>
             <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -1302,7 +1303,7 @@
             "Reservation Thunders": [
                 "Suraj Haridas (C)", "Jude Natarajan", "Hanish", "Himanshu Shah",
                 "Visakh", "Nagaraj", "Shahin Tharayil", "Susanth Chottatodi",
-                "Joseph Pingoy", "Rashid Mohammed", "Mohit Arora"
+                "Joseph Pingoy", "Sihab Mohammed", "Rashid Mohammed", "Mohit Arora"
             ],
             "Stallions": [
                 "Furqan Bajwa (C)", "Vishnu Agrawal", "Tushar Shetty", "Kabeer Sayyed",
@@ -1317,7 +1318,7 @@
             "Commercial Renegades": [
                 "Tarique Shafi (C)", "Faris Aydeed", "Sameer Parkar", "Mobin Philips",
                 "Sharief Abbas", "Gaurav Kumar", "Ridge Menezes", "Ryan Dsouza",
-                "Chetan", "Raghavendra Poojary", "Srivathsan Kannan", "Abhijit More", "Ashwin Anand", "Shihab Mohammed"
+                "Chetan", "Raghavendra Poojary", "Srivathsan Kannan", "Abhijit More"
             ],
             "Operation Stars": [
                 "Abdul Rahman (C)", "Junaid Butt", "Lohith De Silva", "Sumair Mukadam",
@@ -4520,6 +4521,27 @@ window.shareLiveMatchLink = function() {
                 titleEl.addEventListener(ev, cancelPress);
             });
         })();
+
+        // Pushes the squads in DEFAULT_TEAMS (code) to Firebase, roster data only.
+        // Fixtures and match results are not touched.
+        window.syncRostersOnly = function() {
+            if (!window.isSuperUser()) return alert("Superuser login required.");
+            if (!confirm("Update all team squads in Firebase from the code? Fixtures and results are not changed.")) return;
+            var jobs = Object.keys(DEFAULT_TEAMS).map(function(teamName) {
+                return db.collection("teams").doc(teamName).set({
+                    teamName: teamName,
+                    tournament: "FZ_ICL_2026",
+                    players: DEFAULT_TEAMS[teamName]
+                }, { merge: true });
+            });
+            Promise.all(jobs).then(function() {
+                return loadTeamsFromDatabase();
+            }).then(function() {
+                alert("✅ Squads updated for " + Object.keys(DEFAULT_TEAMS).length + " teams.");
+            }).catch(function(e) {
+                alert("Squad update failed: " + (e && e.message ? e.message : e));
+            });
+        };
 
     </script>
 </body>
