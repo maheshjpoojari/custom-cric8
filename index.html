@@ -788,6 +788,7 @@
                 <button class="tab-btn" id="stdTabFielding" onclick="window.switchStandingsTab('fielding')">🧤 Fielding</button>
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
+            <button class="btn btn-red btn-block" style="margin-top:12px;" onclick="window.resetStandingsForTournament()">♻️ RESET STANDINGS FOR SELECTED TOURNAMENT</button>
             <button class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -3883,15 +3884,37 @@ function drawFixturesList(box) {
             renderScorecardModal(m);
         };
 
+        window.standingsResetAt = window.standingsResetAt || {};
+
         window.openStandingsView = function() {
             window.navigateView('viewStandings');
-            db.collection("match_history").get().then(function(snap) {
+            db.collection("settings").doc("standings_reset").get().then(function(doc) {
+                window.standingsResetAt = doc.exists ? (doc.data() || {}) : {};
+                return db.collection("match_history").get();
+            }).then(function(snap) {
                 var arr = [];
                 snap.forEach(function(d) { arr.push(d.data()); });
                 archivedMatchesCache = arr;
                 window.switchStandingsTab('points');
             }).catch(function() {
                 window.switchStandingsTab('points');
+            });
+        };
+
+        window.resetStandingsForTournament = function() {
+            if (!isScoringAuthorized) return alert("Only the scorer can reset standings.");
+            var filterEl = document.getElementById('standingsTourneyFilter');
+            var t = filterEl ? filterEl.value : '';
+            if (!t) return;
+            if (!confirm("Reset the standings for this tournament? Past matches stay archived but will no longer count in the points table, NRR or caps.")) return;
+            var cutoffs = Object.assign({}, window.standingsResetAt || {});
+            cutoffs[t] = new Date().toISOString();
+            db.collection("settings").doc("standings_reset").set(cutoffs).then(function() {
+                window.standingsResetAt = cutoffs;
+                window.switchStandingsTab(window.activeStandingsTab || 'points');
+                alert("✅ Standings reset for this tournament.");
+            }).catch(function(e) {
+                alert("Reset failed: " + (e && e.message ? e.message : e));
             });
         };
 window.switchStandingsTab = function(tab) {
@@ -3918,6 +3941,8 @@ window.switchStandingsTab = function(tab) {
 
             var matches = archivedMatchesCache.filter(function(m) {
                 if (m.match_status !== 'completed') return false;
+                var resetCut = (window.standingsResetAt || {})[selectedTourney];
+                if (resetCut && String(m.timestamp || '') < resetCut) return false;
                 var mTourney = (m.tournament || 'FZ_ICL_2026');
                 if (isIcl && (mTourney === 'FZ_ICL_2026')) return true;
                 return mTourney === selectedTourney;
@@ -3952,12 +3977,42 @@ window.switchStandingsTab = function(tab) {
                         iclTable[nA].pts += ICL_RULES.draw; iclTable[nB].pts += ICL_RULES.draw;
                     }
                 });
-                var iclRows = Object.keys(iclTable).map(function(k) { return Object.assign({ team: k }, iclTable[k]); })
-                    .sort(function(a, b) { return b.pts - a.pts || b.w - a.w; });
+                var nrrAcc = {};
+                matches.forEach(function(m) {
+                    if (!m.tA || !m.tB || !m.inn1_scorecard || !m.inn2_scorecard) return;
+                    if (String(m.winner || "").indexOf("Walkover") !== -1) return;
+                    var quota = (parseInt(m.totalOvers) || 8) * 6;
+                    var ps = parseInt(m.playersPerTeam) || 8;
+                    var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                    var inn1Team = t1Bats ? m.tA.name : m.tB.name;
+                    var inn2Team = t1Bats ? m.tB.name : m.tA.name;
+                    var sc1 = m.inn1_scorecard, sc2 = m.inn2_scorecard;
+                    var b1 = (parseInt(sc1.totalWkts) || 0) >= ps - 1 ? quota : (parseInt(sc1.totalBalls) || 0);
+                    var b2 = (parseInt(sc2.totalWkts) || 0) >= ps - 1 ? quota : (parseInt(sc2.totalBalls) || 0);
+                    var r1 = parseInt(sc1.totalScore) || 0;
+                    var r2 = parseInt(sc2.totalScore) || 0;
+                    [[inn1Team, r1, b1, t1Bats ? m.tB.name : m.tA.name, r2, b2],
+                     [inn2Team, r2, b2, t1Bats ? m.tA.name : m.tB.name, r1, b1]].forEach(function(x) {
+                        var bat = x[0], bowl = x[3];
+                        if (!nrrAcc[bat]) nrrAcc[bat] = { rf: 0, ob: 0, ra: 0, ib: 0 };
+                        if (!nrrAcc[bowl]) nrrAcc[bowl] = { rf: 0, ob: 0, ra: 0, ib: 0 };
+                        nrrAcc[bat].rf += x[1];
+                        nrrAcc[bat].ob += x[2];
+                        nrrAcc[bowl].ra += x[1];
+                        nrrAcc[bowl].ib += x[2];
+                    });
+                });
+                var iclRows = Object.keys(iclTable).map(function(k) {
+                    var a = nrrAcc[k] || { rf: 0, ob: 0, ra: 0, ib: 0 };
+                    var runRate = a.ob > 0 ? a.rf / (a.ob / 6) : 0;
+                    var concRate = a.ib > 0 ? a.ra / (a.ib / 6) : 0;
+                    return Object.assign({ team: k, nrr: runRate - concRate }, iclTable[k]);
+                }).sort(function(a, b) { return b.pts - a.pts || b.nrr - a.nrr || b.w - a.w; });
 
-                var iclHtml = '<table class="sc-table"><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th></tr>';
+                var iclHtml = '<table class="sc-table"><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr>';
                 iclRows.forEach(function(r) {
-                    iclHtml += '<tr><td><b>' + r.team + '</b></td><td>' + r.p + '</td><td>' + r.w + '</td><td>' + r.l + '</td><td style="color:var(--gold); font-weight:900;">' + r.pts + '</td></tr>';
+                    var nrrTxt = (r.nrr >= 0 ? '+' : '') + r.nrr.toFixed(3);
+                    iclHtml += '<tr><td><b>' + r.team + '</b></td><td>' + r.p + '</td><td>' + r.w + '</td><td>' + r.l + '</td><td style="color:var(--gold); font-weight:900;">' + r.pts + '</td><td style="color:' + (r.nrr >= 0 ? 'var(--green)' : 'var(--red)') + '; font-weight:800;">' + nrrTxt + '</td></tr>';
                 });
                 iclHtml += '</table>';
                 iclHtml += '<div style="font-size:0.72rem; color:#64748b; margin-top:8px; text-align:center;">Win 2 pts · Draw 1 pt · Loss 0 pt · Walkover 2 pts</div>';
