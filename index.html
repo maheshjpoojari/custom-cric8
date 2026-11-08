@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --bg: #0b1120;
@@ -816,6 +817,7 @@
                 <button class="tab-btn" id="stdTabFielding" onclick="window.switchStandingsTab('fielding')">🧤 Fielding</button>
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
+            <button class="btn btn-green btn-block" style="margin-top:12px;" onclick="window.exportTournamentExcel()">📊 EXPORT TOURNAMENT STATS (SHARE)</button>
             <button class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -3771,7 +3773,7 @@
             for (var name in (sc.batters || {})) {
                 var st = sc.batters[name];
                 var sr = st.balls > 0 ? ((st.runs / st.balls) * 100).toFixed(1) : "0.0";
-                var isRebat = rebatList.includes(name) || (isPairs && st.balls > 8);
+                var isRebat = rebatList.includes(name);
                 var badgeHtml = isRebat ? '<span class="repeat-badge">2x</span>' : '';
                 var ipHtml = ipMap[name] ? '<span class="ip-badge">⚡IP</span>' : '';
                 var rColor = st.runs < 0 ? 'style="color:var(--red); font-weight:800;"' : '';
@@ -4589,6 +4591,127 @@ window.shareLiveMatchLink = function() {
                 return r;
             };
         })();
+        // ---------- Tournament Excel export (cumulative, one workbook) ----------
+        window.exportMatchesForTournament = function(t) {
+            var aliases = (t === 'FZ_ICL_2026') ? ['FZ_ICL_2026', 'icl_2026', 'icl'] : [t];
+            return (archivedMatchesCache || []).filter(function(m) {
+                return m.match_status === 'completed' && aliases.indexOf(m.tournament) !== -1;
+            }).sort(function(a, b) { return String(a.timestamp || '') < String(b.timestamp || '') ? -1 : 1; });
+        };
+
+        window.buildTournamentWorkbook = function(t) {
+            var matches = window.exportMatchesForTournament(t);
+            var summary = [], batting = [], bowling = [];
+            matches.forEach(function(m, i) {
+                var no = i + 1;
+                var date = m.timestamp ? String(m.timestamp).substring(0, 10) : '';
+                var sc1 = m.inn1_scorecard || {}, sc2 = m.inn2_scorecard || {};
+                var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                var nameA = (m.tA && m.tA.name) || 'Team A';
+                var nameB = (m.tB && m.tB.name) || 'Team B';
+                var team1Bat = t1Bats ? nameA : nameB;
+                var team2Bat = t1Bats ? nameB : nameA;
+                var ov = parseInt(m.totalOvers) || 8;
+                var sc = function(s) { return (s.totalScore || 0) + '/' + (s.totalWkts || 0) + ' (' + Math.floor((s.totalBalls || 0) / 6) + '.' + ((s.totalBalls || 0) % 6) + ')'; };
+
+                summary.push({
+                    'Match No': no, 'Date': date, 'Tournament': t,
+                    'Innings 1 Team': team1Bat, 'Innings 1 Score': sc(sc1),
+                    'Innings 2 Team': team2Bat, 'Innings 2 Score': sc(sc2),
+                    'Result': m.winner || '', 'Overs': ov
+                });
+
+                [[sc1, team1Bat, 1], [sc2, team2Bat, 2]].forEach(function(x) {
+                    var s = x[0], team = x[1], inn = x[2];
+                    var bats = s.batters || {};
+                    Object.keys(bats).forEach(function(p) {
+                        var b = bats[p];
+                        batting.push({
+                            'Match No': no, 'Date': date, 'Innings': inn, 'Batting Team': team, 'Batter': p,
+                            'Runs': b.runs || 0, 'Balls': b.balls || 0, '4s': b.fours || 0, '6s': b.sixes || 0,
+                            'SR': (b.balls > 0) ? Math.round((b.runs / b.balls) * 1000) / 10 : 0,
+                            'Status': (b.dismissals > 0) ? 'Out' : 'Not Out'
+                        });
+                    });
+                    var bowls = s.bowlers || {};
+                    var bowlTeam = (team === nameA) ? nameB : nameA;
+                    Object.keys(bowls).forEach(function(p) {
+                        var bw = bowls[p];
+                        var balls = bw.balls || 0;
+                        bowling.push({
+                            'Match No': no, 'Date': date, 'Innings': inn, 'Bowling Team': bowlTeam, 'Bowler': p,
+                            'Overs': Math.floor(balls / 6) + '.' + (balls % 6),
+                            'Runs': bw.runs || 0, 'Wickets': bw.wkts || 0,
+                            'Economy': balls > 0 ? Math.round((bw.runs / (balls / 6)) * 100) / 100 : 0
+                        });
+                    });
+                });
+            });
+            return { summary: summary, batting: batting, bowling: bowling, count: matches.length };
+        };
+
+        window.csvEscape = function(v) {
+            var s = (v === undefined || v === null) ? '' : String(v);
+            return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        };
+
+        window.rowsToCsv = function(rows, title) {
+            var lines = [title];
+            if (!rows || rows.length === 0) { lines.push('No data yet'); return lines.join('\r\n'); }
+            var headers = Object.keys(rows[0]);
+            lines.push(headers.map(window.csvEscape).join(','));
+            rows.forEach(function(r) {
+                lines.push(headers.map(function(h) { return window.csvEscape(r[h]); }).join(','));
+            });
+            return lines.join('\r\n');
+        };
+
+        window.exportTournamentExcel = function() {
+            try {
+                var filterEl = document.getElementById('standingsTourneyFilter');
+                var t = filterEl ? filterEl.value : 'FZ_ICL_2026';
+                var built = window.buildTournamentWorkbook(t);
+                if (built.count === 0) {
+                    return alert('No completed matches found for this tournament (' + t + '). Open Standings first, then try again.');
+                }
+                var body = [
+                    window.rowsToCsv(built.summary, 'MATCH SUMMARY'),
+                    '',
+                    window.rowsToCsv(built.batting, 'BATTING'),
+                    '',
+                    window.rowsToCsv(built.bowling, 'BOWLING')
+                ].join('\r\n');
+                var today = new Date().toISOString().substring(0, 10);
+                var fileName = 'CricArena_' + t + '_' + today + '_' + built.count + 'matches.csv';
+                var blob = new Blob(['\uFEFF' + body], { type: 'text/csv;charset=utf-8' });
+                var file = null;
+                try { file = new File([blob], fileName, { type: 'text/csv' }); } catch (err) { file = null; }
+
+                var downloadIt = function() {
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(function() { URL.revokeObjectURL(url); document.body.removeChild(a); }, 1000);
+                };
+
+                if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    navigator.share({ files: [file], title: 'Cric-8 Arena stats', text: built.count + ' matches so far' })
+                        .catch(function(err) {
+                            if (err && err.name === 'AbortError') return;
+                            downloadIt();
+                        });
+                } else {
+                    downloadIt();
+                }
+            } catch (err) {
+                console.error('Export failed', err);
+                alert('Export failed: ' + (err && err.message ? err.message : err));
+            }
+        };
+
     </script>
 </body>
 </html>
