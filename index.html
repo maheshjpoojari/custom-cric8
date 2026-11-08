@@ -4666,26 +4666,233 @@ window.shareLiveMatchLink = function() {
             return lines.join('\r\n');
         };
 
+        // ---------- Formatted Excel workbook (multi-sheet, dashboard style) ----------
+        window.xmlEsc = function(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+        window.xc = function(v, style, mergeAcross) {
+            var isNum = typeof v === 'number' && isFinite(v);
+            var attrs = ' ss:StyleID="' + style + '"' + (mergeAcross ? ' ss:MergeAcross="' + mergeAcross + '"' : '');
+            return '<Cell' + attrs + '><Data ss:Type="' + (isNum ? 'Number' : 'String') + '">' +
+                (isNum ? String(v) : window.xmlEsc(v)) + '</Data></Cell>';
+        };
+        window.xr = function(cells, height) {
+            return '<Row' + (height ? ' ss:Height="' + height + '"' : '') + '>' + cells.join('') + '</Row>';
+        };
+        window.xTableRows = function(objs, hdrs) {
+            var out = [];
+            out.push(window.xr(hdrs.map(function(h) { return window.xc(h, 'hdr'); }), 24));
+            if (!objs || objs.length === 0) {
+                out.push(window.xr([window.xc('No data yet', 'txt', Math.max(0, hdrs.length - 1))]));
+                return out;
+            }
+            objs.forEach(function(o, i) {
+                var alt = (i % 2 === 1) ? 'Alt' : '';
+                out.push(window.xr(hdrs.map(function(h) {
+                    var v = o[h];
+                    var isNum = typeof v === 'number' && isFinite(v);
+                    var base = isNum ? 'num' : 'txt';
+                    if (isNum && /SR|Econ|NRR/.test(h)) base = 'dec';
+                    return window.xc(v, base + alt);
+                })));
+            });
+            return out;
+        };
+        window.xSheet = function(name, widths, rowsXml) {
+            return '<Worksheet ss:Name="' + window.xmlEsc(name) + '"><Table>' +
+                widths.map(function(w) { return '<Column ss:Width="' + w + '"/>'; }).join('') +
+                rowsXml.join('') + '</Table></Worksheet>';
+        };
+        window.xStyles = function() {
+            var border = '<Borders>' +
+                '<Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>' +
+                '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>' +
+                '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>' +
+                '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#CBD5E1"/>' +
+                '</Borders>';
+            var cell = function(id, fill, align, fmt, bold) {
+                return '<Style ss:ID="' + id + '">' +
+                    '<Font ss:FontName="Calibri" ss:Size="11"' + (bold ? ' ss:Bold="1"' : '') + '/>' +
+                    '<Interior ss:Color="' + fill + '" ss:Pattern="Solid"/>' +
+                    '<Alignment ss:Horizontal="' + align + '" ss:Vertical="Center"/>' +
+                    border + (fmt ? '<NumberFormat ss:Format="' + fmt + '"/>' : '') + '</Style>';
+            };
+            return '<Styles>' +
+                '<Style ss:ID="Default" ss:Name="Normal"><Font ss:FontName="Calibri" ss:Size="11"/></Style>' +
+                '<Style ss:ID="title"><Font ss:FontName="Calibri" ss:Size="18" ss:Bold="1" ss:Color="#1E3A5F"/><Interior ss:Color="#E0F2FE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left" ss:Vertical="Center"/></Style>' +
+                '<Style ss:ID="subtitle"><Font ss:FontName="Calibri" ss:Size="10" ss:Italic="1" ss:Color="#475569"/><Interior ss:Color="#E0F2FE" ss:Pattern="Solid"/><Alignment ss:Horizontal="Left" ss:Vertical="Center"/></Style>' +
+                '<Style ss:ID="sec"><Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#0F766E"/><Alignment ss:Horizontal="Left" ss:Vertical="Center"/></Style>' +
+                cell('hdr', '#1E3A5F', 'Center', null, true).replace('<Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/>', '<Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>') +
+                cell('txt', '#FFFFFF', 'Left') + cell('txtAlt', '#F1F5F9', 'Left') +
+                cell('num', '#FFFFFF', 'Center', '0') + cell('numAlt', '#F1F5F9', 'Center', '0') +
+                cell('dec', '#FFFFFF', 'Center', '0.00') + cell('decAlt', '#F1F5F9', 'Center', '0.00') +
+                cell('kpiLbl', '#F8FAFC', 'Left', null, true) +
+                cell('kpiVal', '#ECFDF5', 'Center', null, true).replace('<Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/>', '<Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#0F766E"/>') +
+                '</Styles>';
+        };
+        window.buildXmlWorkbook = function(sheetXmlList) {
+            return '<?xml version="1.0"?>' +
+                '<?mso-application progid="Excel.Sheet"?>' +
+                '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ' +
+                'xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+                'xmlns:x="urn:schemas-microsoft-com:office:excel" ' +
+                'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" ' +
+                'xmlns:html="http://www.w3.org/TR/REC-html40">' +
+                window.xStyles() + sheetXmlList.join('') + '</Workbook>';
+        };
+
+        window.computeExportStandings = function(matches) {
+            var table = {}, acc = {};
+            var ensure = function(n) {
+                if (!table[n]) table[n] = { p: 0, w: 0, l: 0, pts: 0 };
+                if (!acc[n]) acc[n] = { rf: 0, ob: 0, ra: 0, ib: 0 };
+            };
+            matches.forEach(function(m) {
+                if (!m.tA || !m.tB) return;
+                var nA = m.tA.name, nB = m.tB.name;
+                ensure(nA); ensure(nB);
+                table[nA].p++; table[nB].p++;
+                var w = String(m.winner || '');
+                var isTie = w.indexOf('TIED') !== -1;
+                if (!isTie && w.indexOf(nA) !== -1) { table[nA].w++; table[nA].pts += 2; table[nB].l++; }
+                else if (!isTie && w.indexOf(nB) !== -1) { table[nB].w++; table[nB].pts += 2; table[nA].l++; }
+                else { table[nA].pts += 1; table[nB].pts += 1; }
+            });
+            matches.forEach(function(m) {
+                if (!m.tA || !m.tB || !m.inn1_scorecard || !m.inn2_scorecard) return;
+                if (String(m.winner || '').indexOf('Walkover') !== -1) return;
+                var quota = (parseInt(m.totalOvers) || 8) * 6;
+                var ps = parseInt(m.playersPerTeam) || 8;
+                var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                var bat1 = t1Bats ? m.tA.name : m.tB.name;
+                var bowl1 = t1Bats ? m.tB.name : m.tA.name;
+                var s1 = m.inn1_scorecard, s2 = m.inn2_scorecard;
+                var b1 = (parseInt(s1.totalWkts) || 0) >= ps - 1 ? quota : (parseInt(s1.totalBalls) || 0);
+                var b2 = (parseInt(s2.totalWkts) || 0) >= ps - 1 ? quota : (parseInt(s2.totalBalls) || 0);
+                var r1 = parseInt(s1.totalScore) || 0, r2 = parseInt(s2.totalScore) || 0;
+                acc[bat1].rf += r1; acc[bat1].ob += b1; acc[bowl1].ra += r1; acc[bowl1].ib += b1;
+                acc[bowl1].rf += r2; acc[bowl1].ob += b2; acc[bat1].ra += r2; acc[bat1].ib += b2;
+            });
+            var rows = Object.keys(table).map(function(k) {
+                var a = acc[k];
+                var rr = a.ob > 0 ? a.rf / (a.ob / 6) : 0;
+                var cr = a.ib > 0 ? a.ra / (a.ib / 6) : 0;
+                return { Team: k, P: table[k].p, W: table[k].w, L: table[k].l, Pts: table[k].pts,
+                         NRR: Math.round((rr - cr) * 1000) / 1000, _nrr: rr - cr };
+            });
+            rows.sort(function(a, b) { return b.Pts - a.Pts || b._nrr - a._nrr || b.W - a.W; });
+            rows.forEach(function(r) { delete r._nrr; });
+            return rows;
+        };
+
+        window.computeExportLeaders = function(matches) {
+            var bat = {}, bowl = {}, innings = [];
+            matches.forEach(function(m) {
+                if (!m.tA || !m.tB) return;
+                var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                var bat1 = t1Bats ? m.tA.name : m.tB.name;
+                var bowl1 = t1Bats ? m.tB.name : m.tA.name;
+                [[m.inn1_scorecard, bat1, bowl1, 1], [m.inn2_scorecard, bowl1, bat1, 2]].forEach(function(x) {
+                    var sc = x[0];
+                    if (!sc) return;
+                    innings.push({ team: x[1], score: parseInt(sc.totalScore) || 0, wkts: parseInt(sc.totalWkts) || 0, match: matches.indexOf(m) + 1 });
+                    var bats = sc.batters || {};
+                    Object.keys(bats).forEach(function(p) {
+                        var b = bats[p];
+                        if (!bat[p]) bat[p] = { Batter: p, Team: x[1], Runs: 0, Balls: 0, Sixes: 0 };
+                        bat[p].Runs += b.runs || 0; bat[p].Balls += b.balls || 0; bat[p].Sixes += b.sixes || 0;
+                    });
+                    var bws = sc.bowlers || {};
+                    Object.keys(bws).forEach(function(p) {
+                        var bw = bws[p];
+                        if (!bowl[p]) bowl[p] = { Bowler: p, Team: x[2], Balls: 0, Runs: 0, Wickets: 0 };
+                        bowl[p].Balls += bw.balls || 0; bowl[p].Runs += bw.runs || 0; bowl[p].Wickets += bw.wkts || 0;
+                    });
+                });
+            });
+            var batList = Object.keys(bat).map(function(k) {
+                var b = bat[k];
+                return { Batter: b.Batter, Team: b.Team, Runs: b.Runs, Balls: b.Balls,
+                         SR: b.Balls > 0 ? Math.round(b.Runs / b.Balls * 1000) / 10 : 0, Sixes: b.Sixes };
+            }).sort(function(a, b) { return b.Runs - a.Runs || b.SR - a.SR; });
+            var bowlList = Object.keys(bowl).map(function(k) {
+                var b = bowl[k];
+                var ov = Math.floor(b.Balls / 6) + '.' + (b.Balls % 6);
+                return { Bowler: b.Bowler, Team: b.Team, Overs: ov, Wickets: b.Wickets, Runs: b.Runs,
+                         Economy: b.Balls > 0 ? Math.round(b.Runs / (b.Balls / 6) * 100) / 100 : 0 };
+            }).sort(function(a, b) { return b.Wickets - a.Wickets || a.Economy - b.Economy; });
+            return { batters: batList, bowlers: bowlList, innings: innings };
+        };
+
         window.exportTournamentExcel = function() {
             try {
                 var filterEl = document.getElementById('standingsTourneyFilter');
                 var t = filterEl ? filterEl.value : 'FZ_ICL_2026';
-                var built = window.buildTournamentWorkbook(t);
-                if (built.count === 0) {
+                var matches = window.exportMatchesForTournament(t);
+                if (matches.length === 0) {
                     return alert('No completed matches found for this tournament (' + t + '). Open Standings first, then try again.');
                 }
-                var body = [
-                    window.rowsToCsv(built.summary, 'MATCH SUMMARY'),
-                    '',
-                    window.rowsToCsv(built.batting, 'BATTING'),
-                    '',
-                    window.rowsToCsv(built.bowling, 'BOWLING')
-                ].join('\r\n');
+                var built = window.buildTournamentWorkbook(t);
+                var standings = window.computeExportStandings(matches);
+                var leaders = window.computeExportLeaders(matches);
+                var tName = (filterEl && filterEl.options[filterEl.selectedIndex]) ? filterEl.options[filterEl.selectedIndex].text : t;
                 var today = new Date().toISOString().substring(0, 10);
-                var fileName = 'CricArena_' + t + '_' + today + '_' + built.count + 'matches.csv';
-                var blob = new Blob(['\uFEFF' + body], { type: 'text/csv;charset=utf-8' });
+
+                var totalRuns = 0, inningsCount = leaders.innings.length;
+                leaders.innings.forEach(function(i) { totalRuns += i.score; });
+                var hi = null, lo = null;
+                leaders.innings.forEach(function(i) {
+                    if (!hi || i.score > hi.score) hi = i;
+                    if (!lo || i.score < lo.score) lo = i;
+                });
+                var avg = inningsCount ? Math.round(totalRuns / inningsCount * 10) / 10 : 0;
+                var topSix = leaders.batters.slice().sort(function(a, b) { return b.Sixes - a.Sixes; })[0];
+                var leader = standings[0];
+
+                // Dashboard sheet
+                var dash = [];
+                dash.push(window.xr([window.xc('CRIC-8 ARENA  ·  ' + tName, 'title', 5)], 34));
+                dash.push(window.xr([window.xc('Official tournament statistics  ·  Generated ' + today + '  ·  ' + matches.length + ' completed matches', 'subtitle', 5)], 20));
+                dash.push(window.xr([window.xc('', 'txt')], 10));
+                dash.push(window.xr([window.xc('KEY FIGURES', 'sec', 5)], 24));
+                var kpis = [
+                    ['Matches played', matches.length],
+                    ['Innings played', inningsCount],
+                    ['Total runs scored', totalRuns],
+                    ['Average runs per innings', avg],
+                    ['Highest team total', hi ? (hi.team + ' — ' + hi.score + '/' + hi.wkts + ' (Match ' + hi.match + ')') : '-'],
+                    ['Lowest team total', lo ? (lo.team + ' — ' + lo.score + '/' + lo.wkts + ' (Match ' + lo.match + ')') : '-'],
+                    ['Standings leader', leader ? (leader.Team + ' — ' + leader.Pts + ' pts') : '-'],
+                    ['Most sixes (player)', topSix ? (topSix.Batter + ' — ' + topSix.Sixes + ' sixes') : '-']
+                ];
+                kpis.forEach(function(k) {
+                    dash.push(window.xr([window.xc(k[0], 'kpiLbl'), window.xc(k[1], 'kpiVal', 3)], 22));
+                });
+                dash.push(window.xr([window.xc('', 'txt')], 10));
+                dash.push(window.xr([window.xc('TOP 5 BATTERS (RUNS)', 'sec', 5)], 24));
+                dash.push.apply(dash, window.xTableRows(leaders.batters.slice(0, 5), ['Batter', 'Team', 'Runs', 'Balls', 'SR', 'Sixes']));
+                dash.push(window.xr([window.xc('', 'txt')], 10));
+                dash.push(window.xr([window.xc('TOP 5 BOWLERS (WICKETS)', 'sec', 5)], 24));
+                dash.push.apply(dash, window.xTableRows(leaders.bowlers.slice(0, 5), ['Bowler', 'Team', 'Overs', 'Wickets', 'Runs', 'Economy']));
+
+                var sheets = [
+                    window.xSheet('Dashboard', [170, 170, 90, 90, 90, 90], dash),
+                    window.xSheet('Standings', [200, 60, 60, 60, 70, 90],
+                        window.xTableRows(standings, ['Team', 'P', 'W', 'L', 'Pts', 'NRR'])),
+                    window.xSheet('Match Summary', [70, 90, 180, 110, 180, 110, 260, 60],
+                        window.xTableRows(built.summary, ['Match No', 'Date', 'Tournament', 'Innings 1 Team', 'Innings 1 Score', 'Innings 2 Team', 'Innings 2 Score', 'Result', 'Overs'])),
+                    window.xSheet('Batting', [70, 90, 70, 180, 160, 60, 60, 50, 50, 70, 80],
+                        window.xTableRows(built.batting, ['Match No', 'Date', 'Innings', 'Batting Team', 'Batter', 'Runs', 'Balls', '4s', '6s', 'SR', 'Status'])),
+                    window.xSheet('Bowling', [70, 90, 70, 180, 160, 70, 60, 70, 80],
+                        window.xTableRows(built.bowling, ['Match No', 'Date', 'Innings', 'Bowling Team', 'Bowler', 'Overs', 'Runs', 'Wickets', 'Economy']))
+                ];
+
+                var xml = window.buildXmlWorkbook(sheets);
+                var fileName = 'CricArena_' + t + '_' + today + '_' + matches.length + 'matches.xls';
+                var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
                 var file = null;
-                try { file = new File([blob], fileName, { type: 'text/csv' }); } catch (err) { file = null; }
+                try { file = new File([blob], fileName, { type: 'application/vnd.ms-excel' }); } catch (err) { file = null; }
 
                 var downloadIt = function() {
                     var url = URL.createObjectURL(blob);
@@ -4698,7 +4905,7 @@ window.shareLiveMatchLink = function() {
                 };
 
                 if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-                    navigator.share({ files: [file], title: 'Cric-8 Arena stats', text: built.count + ' matches so far' })
+                    navigator.share({ files: [file], title: 'Cric-8 Arena stats', text: matches.length + ' matches so far' })
                         .catch(function(err) {
                             if (err && err.name === 'AbortError') return;
                             downloadIt();
