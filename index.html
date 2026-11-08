@@ -8,7 +8,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --bg: #0b1120;
@@ -817,7 +816,6 @@
                 <button class="tab-btn" id="stdTabFielding" onclick="window.switchStandingsTab('fielding')">🧤 Fielding</button>
             </div>
             <div id="standingsContentBox" style="min-height:180px;">Loading tournament statistics...</div>
-            <button class="btn btn-green btn-block" style="margin-top:12px;" onclick="window.exportTournamentExcel()">📊 EXPORT TOURNAMENT EXCEL (SHARE)</button>
             <button class="btn btn-slate btn-block" style="margin-top:14px;" onclick="window.navigateView('viewHome')">⬅️ BACK TO HOME</button>
         </div>
     </div>
@@ -3773,7 +3771,7 @@
             for (var name in (sc.batters || {})) {
                 var st = sc.batters[name];
                 var sr = st.balls > 0 ? ((st.runs / st.balls) * 100).toFixed(1) : "0.0";
-                var isRebat = rebatList.includes(name);
+                var isRebat = rebatList.includes(name) || (isPairs && st.balls > 8);
                 var badgeHtml = isRebat ? '<span class="repeat-badge">2x</span>' : '';
                 var ipHtml = ipMap[name] ? '<span class="ip-badge">⚡IP</span>' : '';
                 var rColor = st.runs < 0 ? 'style="color:var(--red); font-weight:800;"' : '';
@@ -4591,83 +4589,6 @@ window.shareLiveMatchLink = function() {
                 return r;
             };
         })();
-        // ---------- Tournament Excel export (cumulative, one workbook) ----------
-        window.exportMatchesForTournament = function(t) {
-            var aliases = (t === 'FZ_ICL_2026') ? ['FZ_ICL_2026', 'icl_2026', 'icl'] : [t];
-            return (archivedMatchesCache || []).filter(function(m) {
-                return m.match_status === 'completed' && aliases.indexOf(m.tournament) !== -1;
-            }).sort(function(a, b) { return String(a.timestamp || '') < String(b.timestamp || '') ? -1 : 1; });
-        };
-
-        window.buildTournamentWorkbook = function(t) {
-            var matches = window.exportMatchesForTournament(t);
-            var summary = [], batting = [], bowling = [];
-            matches.forEach(function(m, i) {
-                var no = i + 1;
-                var date = m.timestamp ? String(m.timestamp).substring(0, 10) : '';
-                var sc1 = m.inn1_scorecard || {}, sc2 = m.inn2_scorecard || {};
-                var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
-                var team1Bat = t1Bats ? m.tA.name : m.tB.name;
-                var team2Bat = t1Bats ? m.tB.name : m.tA.name;
-                var ov = parseInt(m.totalOvers) || 8;
-                var sc = function(s) { return (s.totalScore || 0) + '/' + (s.totalWkts || 0) + ' (' + Math.floor((s.totalBalls || 0) / 6) + '.' + ((s.totalBalls || 0) % 6) + ')'; };
-
-                summary.push({
-                    'Match No': no, 'Date': date, 'Tournament': t,
-                    'Innings 1 Team': team1Bat, 'Innings 1 Score': sc(sc1),
-                    'Innings 2 Team': team2Bat, 'Innings 2 Score': sc(sc2),
-                    'Result': m.winner || '', 'Overs': ov
-                });
-
-                [[sc1, team1Bat, 1], [sc2, team2Bat, 2]].forEach(function(x) {
-                    var s = x[0], team = x[1], inn = x[2];
-                    var bats = s.batters || {};
-                    Object.keys(bats).forEach(function(p) {
-                        var b = bats[p];
-                        batting.push({
-                            'Match No': no, 'Date': date, 'Innings': inn, 'Batting Team': team, 'Batter': p,
-                            'Runs': b.runs || 0, 'Balls': b.balls || 0, '4s': b.fours || 0, '6s': b.sixes || 0,
-                            'SR': (b.balls > 0) ? Math.round((b.runs / b.balls) * 1000) / 10 : 0,
-                            'Status': (b.dismissals > 0) ? 'Out' : 'Not Out'
-                        });
-                    });
-                    var bowls = s.bowlers || {};
-                    var bowlTeam = (team === m.tA.name) ? m.tB.name : m.tA.name;
-                    Object.keys(bowls).forEach(function(p) {
-                        var bw = bowls[p];
-                        var balls = bw.balls || 0;
-                        bowling.push({
-                            'Match No': no, 'Date': date, 'Innings': inn, 'Bowling Team': bowlTeam, 'Bowler': p,
-                            'Overs': Math.floor(balls / 6) + '.' + (balls % 6),
-                            'Runs': bw.runs || 0, 'Wickets': bw.wkts || 0,
-                            'Economy': balls > 0 ? Math.round((bw.runs / (balls / 6)) * 100) / 100 : 0
-                        });
-                    });
-                });
-            });
-            var wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary.length ? summary : [{ Note: 'No completed matches yet' }]), 'Match Summary');
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(batting.length ? batting : [{ Note: 'No batting data yet' }]), 'Batting');
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bowling.length ? bowling : [{ Note: 'No bowling data yet' }]), 'Bowling');
-            return { wb: wb, count: matches.length };
-        };
-
-        window.exportTournamentExcel = function() {
-            if (typeof XLSX === 'undefined') return alert('Excel library could not load. Check your internet connection and try again.');
-            var filterEl = document.getElementById('standingsTourneyFilter');
-            var t = filterEl ? filterEl.value : 'FZ_ICL_2026';
-            var built = window.buildTournamentWorkbook(t);
-            if (built.count === 0) return alert('No completed matches for this tournament yet.');
-            var today = new Date().toISOString().substring(0, 10);
-            var fileName = 'CricArena_' + t + '_' + today + '_' + built.count + 'matches.xlsx';
-            var data = XLSX.write(built.wb, { bookType: 'xlsx', type: 'array' });
-            var file = new File([data], fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                navigator.share({ files: [file], title: 'Cric-8 Arena stats', text: built.count + ' matches so far' }).catch(function() {});
-            } else {
-                XLSX.writeFile(built.wb, fileName);
-            }
-        };
     </script>
 </body>
 </html>
