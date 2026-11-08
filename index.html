@@ -4889,7 +4889,7 @@ window.shareLiveMatchLink = function() {
                 ];
 
                 var xml = window.buildXmlWorkbook(sheets);
-                var fileName = 'CricArena_' + t + '_' + today + '_' + matches.length + 'matches.xls';
+                var fileName = 'CustomCricArena_' + t + '_' + today + '_' + matches.length + 'matches.xls';
                 var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
                 var file = null;
                 try { file = new File([blob], fileName, { type: 'application/vnd.ms-excel' }); } catch (err) { file = null; }
