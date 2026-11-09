@@ -2397,7 +2397,7 @@
                 var isWithinOvers1To7 = (completedOvers < (totalOvers - 1));
                 var canTogglePP = isPairs && isBeforeOverStart && isWithinOvers1To7 && !isOverComplete;
 
-                var isMandatoryNow = isPairs && d.inn === 1 && completedOvers === 0 && isBeforeOverStart;
+                var isMandatoryNow = isPairs && completedOvers === 0 && isBeforeOverStart;
                 if (isMandatoryNow) {
                     ppBtn.disabled = true;
                     ppBtn.classList.add('btn-disabled');
@@ -3305,7 +3305,7 @@
             d.inn = 2;
             d.curr_over = [];
             d.consecutive_dots = 0;
-            d.powerplay_active = false;
+            d.powerplay_active = (d.rulesFormat === 'pairs' || d.rulesFormat === 'pairs_practice');
             d.crr_bat_name = sName; d.crr_bat_runs = 0; d.crr_bat_balls = 0;
             d.non_bat_name = nsName; d.non_bat_runs = 0; d.non_bat_balls = 0;
             d.crr_bowl = bName;
@@ -3493,8 +3493,8 @@
                 return alert("⚠️ Power Play is not allowed in Over " + totalOvers + " (the final over) of any innings.");
             }
 
-            if ((d.inn || 1) === 1 && completedOvers === 0) {
-                return alert("⚠️ Power Play is mandatory in Over 1 of Innings 1 and cannot be changed.");
+            if (completedOvers === 0) {
+                return alert("⚠️ Power Play is mandatory in Over 1 of each innings and cannot be changed.");
             }
 
             if (d.curr_over && d.curr_over.length > 0) {
@@ -4889,7 +4889,7 @@ window.shareLiveMatchLink = function() {
                 ];
 
                 var xml = window.buildXmlWorkbook(sheets);
-                var fileName = 'CustomCricArena_' + t + '_' + today + '_' + matches.length + 'matches.xls';
+                var fileName = 'CricArena_' + t + '_' + today + '_' + matches.length + 'matches.xls';
                 var blob = new Blob([xml], { type: 'application/vnd.ms-excel' });
                 var file = null;
                 try { file = new File([blob], fileName, { type: 'application/vnd.ms-excel' }); } catch (err) { file = null; }
