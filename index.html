@@ -965,6 +965,15 @@
          VIEW 8: LIVE SCORER & SPECTATOR SCOREBOARD
          ========================================== -->
     <div id="viewScorer" class="app-view hidden">
+        <div id="matchEndPanel" class="hidden" style="background:#0f172a; border:2px solid var(--gold); border-radius:14px; padding:16px; margin:10px 0; text-align:center;">
+            <div style="color:var(--gold); font-weight:900; font-size:0.85rem; letter-spacing:1px;">MATCH COMPLETED</div>
+            <div id="matchEndWinner" style="color:#e2e8f0; font-weight:900; font-size:1.05rem; margin:8px 0 14px;"></div>
+            <button class="btn btn-blue btn-block" onclick="window.openLiveScorecardPopup(1)">📋 VIEW SCORECARD & SUMMARY</button>
+            <button class="btn btn-green btn-block" style="margin-top:8px;" onclick="window.saveCompletedMatchToArchive()">💾 SAVE MATCH TO ARCHIVE</button>
+            <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.startNewMatchFromScorecard()">🔄 START NEW MATCH</button>
+            <button id="matchEndBackBtn" class="btn btn-gold btn-block" style="margin-top:8px;" onclick="window.reopenMatchForEdit()">⬅️ BACK TO LIVE MATCH SCORE</button>
+            <button id="matchEndFinishBtn" class="btn btn-green btn-block hidden" style="margin-top:8px;" onclick="window.finishMatchEdits()">✅ FINISH EDITS</button>
+        </div>
         <div class="header">
             <div id="teamNameDisp">Team 1 (Inn 1)</div>
             <div id="pairBadgeDisp" class="pair-badge">Pair 1 (Overs 1-2)</div>
@@ -1018,6 +1027,7 @@
             <button class="btn btn-util" style="color:var(--gold);" onclick="window.walkoverMatch()">WALKOVER</button>
             <button id="ppToggleBtn" class="btn btn-util" style="background:var(--orange); color:#fff;" onclick="window.togglePowerplay()">⚡ POWERPLAY</button>
             <button id="impactPlayerBtn" class="btn btn-util btn-disabled" style="background:#334155; color:#fff;" onclick="window.openImpactPlayerModal()">⚡ IMPACT</button>
+            <button id="penaltyBtn" class="btn btn-util" style="background:#7f1d1d; color:#fff;" onclick="window.choosePenalty()">⚠️ PENALTY</button>
             <button class="btn btn-util" style="color:var(--red);" onclick="window.abortMatch()">ABORT</button>
         </div>
     </div>
@@ -2238,9 +2248,38 @@
             return legalCount >= 6;
         }
 
+        window.matchEditMode = false;
+
+        window.applyMatchEndState = function(d) {
+            var panel = document.getElementById('matchEndPanel');
+            var scorer = document.getElementById('viewScorer');
+            if (!panel || !scorer) return;
+            var completed = d.match_status === 'completed' && !(typeof inspectedArchiveMatch !== 'undefined' && inspectedArchiveMatch);
+            var editing = completed && window.matchEditMode;
+            var lock = completed && !editing;
+            panel.classList.toggle('hidden', !completed);
+            var winEl = document.getElementById('matchEndWinner');
+            if (winEl && completed) winEl.innerText = d.winner || 'Match completed';
+            var backBtn = document.getElementById('matchEndBackBtn');
+            var finishBtn = document.getElementById('matchEndFinishBtn');
+            if (backBtn) backBtn.classList.toggle('hidden', editing);
+            if (finishBtn) finishBtn.classList.toggle('hidden', !editing);
+            var pb = document.getElementById('penaltyBtn');
+            if (pb) {
+                var pen = parseInt(d.pending_penalty) || 0;
+                pb.innerText = pen ? ('⚠️ PENALTY ' + pen + ' ✓') : '⚠️ PENALTY';
+            }
+            Array.prototype.forEach.call(scorer.children, function(child) {
+                if (child === panel) return;
+                child.style.pointerEvents = lock ? 'none' : '';
+                child.style.opacity = lock ? '0.35' : '';
+            });
+        };
+
         function updateUI() {
             if (!matchData) return;
             var d = matchData;
+            window.applyMatchEndState(d);
 
             if (d.match_status === "completed" && !document.getElementById('scorecardModal').classList.contains('viewed')) {
                 renderScorecardModal(d);
@@ -4919,6 +4958,85 @@ window.shareLiveMatchLink = function() {
             }
         };
 
+        // ---------- Penalty runs (batter's runs and team total, one ball) ----------
+        window.choosePenalty = function() {
+            if (!isScoringAuthorized || !matchData) return;
+            if (matchData.match_status === 'completed' && !window.matchEditMode) return;
+            window.openPlayerPicker('Penalty runs (deducted from the batter)', ['-1', '-2', '-3', '-4', '-5', '-6'], '', function(v) {
+                var d = JSON.parse(JSON.stringify(matchData));
+                d.pending_penalty = parseInt(v, 10);
+                syncMatchState(d);
+            });
+        };
+
+        // Recalculate the result after a score change in a completed pairs match
+        window.recomputeMatchResult = function(d) {
+            if (!isPairsFormat(d) || d.inn !== 2 || !d.tA || !d.tB) return;
+            var t1Bats = (d.tossWinner === 'tA') ? (d.tossDecision === 'bat') : (d.tossDecision === 'bowl');
+            var batFirst = t1Bats ? d.tA : d.tB;
+            var chase = t1Bats ? d.tB : d.tA;
+            var target = (parseInt(batFirst.score) || 0) + 1;
+            var score = parseInt(chase.score) || 0;
+            if (score >= target) {
+                d.winner = "🎉 " + chase.name + " WON! (" + score + " vs " + (target - 1) + ")";
+            } else if (score === target - 1) {
+                d.winner = "🤝 MATCH TIED! (" + score + " runs each)";
+            } else {
+                var diff = (target - 1) - score;
+                d.winner = "🎉 " + batFirst.name + " WON by " + diff + " run" + (diff > 1 ? "s" : "") + "!";
+            }
+        };
+
+        // Wrap the scoring function: if a penalty is pending, apply it to the same delivery
+        (function() {
+            var origHandle = window.handleAction;
+            window.handleAction = function(val, type) {
+                var pen = (matchData && parseInt(matchData.pending_penalty)) || 0;
+                if (!pen || !matchData) return origHandle.apply(this, arguments);
+
+                var striker0 = matchData.crr_bat_name;
+                var before = matchData.last_state;
+                origHandle.apply(this, arguments);
+                if (!matchData || matchData.last_state === before) return; // delivery was not recorded
+
+                var m = JSON.parse(JSON.stringify(matchData));
+                m.pending_penalty = 0;
+                var isA = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                if (m.inn === 2) isA = !isA;
+                var tk = isA ? 'tA' : 'tB';
+                var sk = m.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
+
+                m[tk].score = (parseInt(m[tk].score) || 0) - pen;
+                if (m[sk]) {
+                    if (m[sk].batters && m[sk].batters[striker0]) m[sk].batters[striker0].runs -= pen;
+                    if (typeof m[sk].totalScore === 'number') m[sk].totalScore -= pen;
+                }
+                if (m.crr_bat_name === striker0) m.crr_bat_runs = (parseInt(m.crr_bat_runs) || 0) - pen;
+                else if (m.non_bat_name === striker0) m.non_bat_runs = (parseInt(m.non_bat_runs) || 0) - pen;
+
+                if (Array.isArray(m.curr_over) && m.curr_over.length) {
+                    var last = String(m.curr_over[m.curr_over.length - 1]);
+                    if (/^-?\d+$/.test(last)) m.curr_over[m.curr_over.length - 1] = String(parseInt(last, 10) - pen);
+                }
+                if (m.match_status === 'completed') window.recomputeMatchResult(m);
+                syncMatchState(m);
+            };
+        })();
+
+        // ---------- Back to live scoring from the match-end panel ----------
+        window.reopenMatchForEdit = function() {
+            if (!matchData || matchData.match_status !== 'completed') return;
+            window.matchEditMode = true;
+            applyMatchEndState(matchData);
+        };
+
+        window.finishMatchEdits = function() {
+            if (!matchData) return;
+            var d = JSON.parse(JSON.stringify(matchData));
+            window.recomputeMatchResult(d);
+            window.matchEditMode = false;
+            syncMatchState(d);
+        };
     </script>
 </body>
 </html>
