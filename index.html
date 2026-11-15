@@ -966,7 +966,7 @@
          ========================================== -->
     <div id="viewScorer" class="app-view hidden">
         <div id="matchEndPanel" class="hidden" style="background:#0f172a; border:2px solid var(--gold); border-radius:14px; padding:16px; margin:10px 0; text-align:center;">
-            <div style="color:var(--gold); font-weight:900; font-size:0.85rem; letter-spacing:1px;">MATCH COMPLETED</div>
+            <div id="matchEndHeading" style="color:var(--gold); font-weight:900; font-size:0.85rem; letter-spacing:1px;">MATCH COMPLETED</div>
             <div id="matchEndWinner" style="color:#e2e8f0; font-weight:900; font-size:1.05rem; margin:8px 0 14px;"></div>
             <button id="matchEndViewBtn" class="btn btn-blue btn-block" onclick="window.openLiveScorecardPopup(1)">📋 VIEW SCORECARD & SUMMARY</button>
             <button id="matchEndSaveBtn" class="btn btn-green btn-block" style="margin-top:8px;" onclick="window.saveCompletedMatchToArchive()">💾 SAVE MATCH TO ARCHIVE</button>
@@ -2252,6 +2252,7 @@
         window.matchEditMode = false;
 
         window.applyMatchEndState = function(d) {
+            window.ppNormalize(d);
             var panel = document.getElementById('matchEndPanel');
             var scorer = document.getElementById('viewScorer');
             if (!panel || !scorer) return;
@@ -2261,9 +2262,11 @@
             var lock = completed && !editing;
             panel.classList.toggle('hidden', !(completed || innEdit));
             var winEl = document.getElementById('matchEndWinner');
+            var headEl = document.getElementById('matchEndHeading');
+            if (headEl) headEl.innerText = innEdit ? 'INNINGS 1 EDIT MODE' : 'MATCH COMPLETED';
             if (winEl) {
                 if (completed) winEl.innerText = d.winner || 'Match completed';
-                else if (innEdit) winEl.innerText = 'INNINGS 1 EDIT MODE: tap FINISH EDITS to start innings 2';
+                else if (innEdit) winEl.innerText = 'Tap FINISH EDITS to start innings 2';
             }
             ['matchEndViewBtn', 'matchEndSaveBtn', 'matchEndNewBtn', 'matchEndBackBtn'].forEach(function(id) {
                 var b = document.getElementById(id);
@@ -2440,7 +2443,7 @@
             var ppBtn = document.getElementById('ppToggleBtn');
             if (ppBtn) {
                 var isBeforeOverStart = (!d.curr_over || d.curr_over.length === 0);
-                var isWithinOvers1To7 = (completedOvers < (totalOvers - 1));
+                var isWithinOvers1To7 = (completedOvers >= 1 && completedOvers <= 5) && (!d['pp_used_inn' + d.inn] || d.powerplay_active);
                 var canTogglePP = isPairs && isBeforeOverStart && isWithinOvers1To7 && !isOverComplete;
 
                 var isMandatoryNow = isPairs && completedOvers === 0 && isBeforeOverStart;
@@ -3352,6 +3355,7 @@
             d.curr_over = [];
             d.consecutive_dots = 0;
             d.powerplay_active = (d.rulesFormat === 'pairs' || d.rulesFormat === 'pairs_practice');
+            delete d.pp_over;
             d.crr_bat_name = sName; d.crr_bat_runs = 0; d.crr_bat_balls = 0;
             d.non_bat_name = nsName; d.non_bat_runs = 0; d.non_bat_balls = 0;
             d.crr_bowl = bName;
@@ -3856,22 +3860,21 @@
             };
             setBtns("SAVING TO CLOUD...", true);
 
+            // One record per match: the id comes from the match's own start/finish time, so re-saving overwrites it
+            var baseTs = d.timestamp || new Date().toISOString();
+            var docId = ('arc_' + String(currentMatchId) + '_' + String(baseTs)).replace(/[^A-Za-z0-9_\-]/g, '_');
+
             var clean = JSON.parse(JSON.stringify(d));
+            delete clean.archive_id;
             clean.matchId = currentMatchId;
             clean.mvp = computeMatchMvp(d);
-            clean.timestamp = new Date().toISOString();
-            delete clean.archive_id;
+            clean.timestamp = baseTs;
+            clean.savedAt = new Date().toISOString();
 
-            // Re-saving the same match (e.g. after edits) updates its archive record instead of adding a new one
-            var existingId = (!inspectedArchiveMatch && matchData && matchData.archive_id) ? matchData.archive_id : null;
-            var write = existingId
-                ? db.collection("match_history").doc(existingId).set(clean).then(function() { return existingId; })
-                : db.collection("match_history").add(clean).then(function(ref) { return ref.id; });
-
-            write.then(function(id) {
-                if (!inspectedArchiveMatch && matchData) {
+            db.collection("match_history").doc(docId).set(clean).then(function() {
+                if (!inspectedArchiveMatch && matchData && matchData.archive_id !== docId) {
                     var m2 = JSON.parse(JSON.stringify(matchData));
-                    m2.archive_id = id;
+                    m2.archive_id = docId;
                     syncMatchState(m2);
                 }
                 setBtns("✅ SAVED TO ARCHIVE (TAP TO UPDATE)", false);
@@ -5009,7 +5012,7 @@ window.shareLiveMatchLink = function() {
         (function() {
             var origHandle = window.handleAction;
             window.handleAction = function(val, type) {
-                var pen = (matchData && parseInt(matchData.pending_penalty)) || 0;
+                var pen = Math.abs((matchData && parseInt(matchData.pending_penalty)) || 0);
                 if (!pen || !matchData) return origHandle.apply(this, arguments);
 
                 var striker0 = matchData.crr_bat_name;
@@ -5072,6 +5075,48 @@ window.shareLiveMatchLink = function() {
             closeModal('inningsBreakModal');
             window.innBreakEditing = true;
             applyMatchEndState(matchData);
+        };
+        // ---------- Power play: one mandatory (over 1) + one optional (overs 2 to 6) per innings ----------
+        window.ppCurrentOver = function(d) {
+            var isA = (d.tossWinner === 'tA') ? (d.tossDecision === 'bat') : (d.tossDecision === 'bowl');
+            if (d.inn === 2) isA = !isA;
+            var balls = parseInt((isA ? d.tA : d.tB).balls) || 0;
+            return Math.floor(balls / 6);
+        };
+
+        // A power play belongs to the over it was taken in; it ends when that over ends
+        window.ppNormalize = function(d) {
+            if (!d || !d.powerplay_active || !d.tA || !d.tB) return;
+            var over = window.ppCurrentOver(d);
+            if (typeof d.pp_over !== 'number') { d.pp_over = over; return; }
+            if (d.pp_over !== over) d.powerplay_active = false;
+        };
+
+        window.togglePowerplay = function() {
+            if (!isScoringAuthorized || !matchData) return;
+            var d = JSON.parse(JSON.stringify(matchData));
+            if (!isPairsFormat(d)) return alert("⚠️ Power Play applies only to the Pairs format.");
+            var over = window.ppCurrentOver(d);
+            var totalOvers = parseInt(d.totalOvers) || 8;
+            var midOver = (d.curr_over && d.curr_over.length > 0);
+            var usedKey = 'pp_used_inn' + d.inn;
+
+            if (midOver) return alert("⚠️ Power Play can be set only before the first ball of an over.");
+            if (over === 0) return alert("⚠️ Power Play is mandatory in Over 1 of each innings and cannot be changed.");
+            if (over >= totalOvers - 1) return alert("⚠️ Power Play is not allowed in Over " + totalOvers + " of any innings.");
+            if (over > 5) return alert("⚠️ The second Power Play can be taken only in Overs 2 to 6.");
+
+            if (d.powerplay_active) {
+                d.powerplay_active = false;
+                d[usedKey] = false;
+            } else {
+                if (d[usedKey]) return alert("⚠️ The second Power Play is already used in this innings.");
+                d.powerplay_active = true;
+                d.pp_over = over;
+                d[usedKey] = true;
+                alert("Power Play 2 Fielders On Boundary");
+            }
+            syncMatchState(d);
         };
     </script>
 </body>
