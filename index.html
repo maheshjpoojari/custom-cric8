@@ -968,9 +968,9 @@
         <div id="matchEndPanel" class="hidden" style="background:#0f172a; border:2px solid var(--gold); border-radius:14px; padding:16px; margin:10px 0; text-align:center;">
             <div style="color:var(--gold); font-weight:900; font-size:0.85rem; letter-spacing:1px;">MATCH COMPLETED</div>
             <div id="matchEndWinner" style="color:#e2e8f0; font-weight:900; font-size:1.05rem; margin:8px 0 14px;"></div>
-            <button class="btn btn-blue btn-block" onclick="window.openLiveScorecardPopup(1)">📋 VIEW SCORECARD & SUMMARY</button>
-            <button class="btn btn-green btn-block" style="margin-top:8px;" onclick="window.saveCompletedMatchToArchive()">💾 SAVE MATCH TO ARCHIVE</button>
-            <button class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.startNewMatchFromScorecard()">🔄 START NEW MATCH</button>
+            <button id="matchEndViewBtn" class="btn btn-blue btn-block" onclick="window.openLiveScorecardPopup(1)">📋 VIEW SCORECARD & SUMMARY</button>
+            <button id="matchEndSaveBtn" class="btn btn-green btn-block" style="margin-top:8px;" onclick="window.saveCompletedMatchToArchive()">💾 SAVE MATCH TO ARCHIVE</button>
+            <button id="matchEndNewBtn" class="btn btn-slate btn-block" style="margin-top:8px;" onclick="window.startNewMatchFromScorecard()">🔄 START NEW MATCH</button>
             <button id="matchEndBackBtn" class="btn btn-gold btn-block" style="margin-top:8px;" onclick="window.reopenMatchForEdit()">⬅️ BACK TO LIVE MATCH SCORE</button>
             <button id="matchEndFinishBtn" class="btn btn-green btn-block hidden" style="margin-top:8px;" onclick="window.finishMatchEdits()">✅ FINISH EDITS</button>
         </div>
@@ -1215,6 +1215,7 @@
                 <select id="inn2BowlerSelect" class="input-field"></select>
             </div>
 
+            <button class="btn btn-gold btn-block" style="margin-bottom:8px;" onclick="window.innBreakBackToLive()">⬅️ BACK TO LIVE MATCH SCORE</button>
             <button class="btn btn-purple btn-block" onclick="window.openImpactPlayerModal()">⚡ IMPACT PLAYER (OPTIONAL)</button>
             <button class="btn btn-green btn-block" onclick="window.confirmStartInnings2()">🚀 START INNINGS 2</button>
         </div>
@@ -2255,15 +2256,21 @@
             var scorer = document.getElementById('viewScorer');
             if (!panel || !scorer) return;
             var completed = d.match_status === 'completed' && !(typeof inspectedArchiveMatch !== 'undefined' && inspectedArchiveMatch);
+            var innEdit = !!window.innBreakEditing && !completed;
             var editing = completed && window.matchEditMode;
             var lock = completed && !editing;
-            panel.classList.toggle('hidden', !completed);
+            panel.classList.toggle('hidden', !(completed || innEdit));
             var winEl = document.getElementById('matchEndWinner');
-            if (winEl && completed) winEl.innerText = d.winner || 'Match completed';
-            var backBtn = document.getElementById('matchEndBackBtn');
+            if (winEl) {
+                if (completed) winEl.innerText = d.winner || 'Match completed';
+                else if (innEdit) winEl.innerText = 'INNINGS 1 EDIT MODE: tap FINISH EDITS to start innings 2';
+            }
+            ['matchEndViewBtn', 'matchEndSaveBtn', 'matchEndNewBtn', 'matchEndBackBtn'].forEach(function(id) {
+                var b = document.getElementById(id);
+                if (b) b.classList.toggle('hidden', innEdit || (id === 'matchEndBackBtn' && editing));
+            });
             var finishBtn = document.getElementById('matchEndFinishBtn');
-            if (backBtn) backBtn.classList.toggle('hidden', editing);
-            if (finishBtn) finishBtn.classList.toggle('hidden', !editing);
+            if (finishBtn) finishBtn.classList.toggle('hidden', !(editing || innEdit));
             var pb = document.getElementById('penaltyBtn');
             if (pb) {
                 var pen = parseInt(d.pending_penalty) || 0;
@@ -3843,24 +3850,35 @@
         window.saveCompletedMatchToArchive = function() {
             var d = inspectedArchiveMatch || matchData;
             if (!d) return;
-            var btn = document.getElementById('saveArchiveBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.innerText = "SAVING TO CLOUD...";
-            }
-            var cleanArchive = JSON.parse(JSON.stringify(d));
-            cleanArchive.matchId = currentMatchId;
-            cleanArchive.mvp = computeMatchMvp(d);
-            cleanArchive.timestamp = new Date().toISOString();
+            var btns = ['saveArchiveBtn', 'matchEndSaveBtn'].map(function(id) { return document.getElementById(id); }).filter(Boolean);
+            var setBtns = function(text, disabled) {
+                btns.forEach(function(b) { b.innerText = text; b.disabled = disabled; });
+            };
+            setBtns("SAVING TO CLOUD...", true);
 
-            db.collection("match_history").add(cleanArchive).then(function() {
-                if (btn) btn.innerText = "✅ MATCH & BALL-BY-BALL SAVED!";
-            }).catch(function(err) {
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerText = "SAVE MATCH TO ARCHIVE 💾";
+            var clean = JSON.parse(JSON.stringify(d));
+            clean.matchId = currentMatchId;
+            clean.mvp = computeMatchMvp(d);
+            clean.timestamp = new Date().toISOString();
+            delete clean.archive_id;
+
+            // Re-saving the same match (e.g. after edits) updates its archive record instead of adding a new one
+            var existingId = (!inspectedArchiveMatch && matchData && matchData.archive_id) ? matchData.archive_id : null;
+            var write = existingId
+                ? db.collection("match_history").doc(existingId).set(clean).then(function() { return existingId; })
+                : db.collection("match_history").add(clean).then(function(ref) { return ref.id; });
+
+            write.then(function(id) {
+                if (!inspectedArchiveMatch && matchData) {
+                    var m2 = JSON.parse(JSON.stringify(matchData));
+                    m2.archive_id = id;
+                    syncMatchState(m2);
                 }
-                alert("Saved locally (Cloud sync warning: " + err.message + ")");
+                setBtns("✅ SAVED TO ARCHIVE (TAP TO UPDATE)", false);
+                alert("✅ Match saved to the archive.");
+            }).catch(function(err) {
+                setBtns("SAVE MATCH TO ARCHIVE 💾", false);
+                alert("Save failed: " + (err && err.message ? err.message : err));
             });
         };
 
@@ -5032,10 +5050,28 @@ window.shareLiveMatchLink = function() {
 
         window.finishMatchEdits = function() {
             if (!matchData) return;
+            if (window.innBreakEditing) {
+                window.innBreakEditing = false;
+                applyMatchEndState(matchData);
+                var d0 = matchData;
+                var t1Bats = (d0.tossWinner === 'tA') ? (d0.tossDecision === 'bat') : (d0.tossDecision === 'bowl');
+                var inn1Key = t1Bats ? 'tA' : 'tB';
+                var inn2Key = t1Bats ? 'tB' : 'tA';
+                window.openInningsBreakModal(d0, inn1Key, inn2Key);
+                return;
+            }
             var d = JSON.parse(JSON.stringify(matchData));
             window.recomputeMatchResult(d);
             window.matchEditMode = false;
             syncMatchState(d);
+        };
+
+        // ---------- Innings 1: back to live scoring from the innings-break screen ----------
+        window.innBreakBackToLive = function() {
+            if (!matchData) return;
+            closeModal('inningsBreakModal');
+            window.innBreakEditing = true;
+            applyMatchEndState(matchData);
         };
     </script>
 </body>
