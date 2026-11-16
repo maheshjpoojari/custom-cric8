@@ -1027,7 +1027,8 @@
             <button class="btn btn-util" style="color:var(--gold);" onclick="window.walkoverMatch()">WALKOVER</button>
             <button id="ppToggleBtn" class="btn btn-util" style="background:var(--orange); color:#fff;" onclick="window.togglePowerplay()">⚡ POWERPLAY</button>
             <button id="impactPlayerBtn" class="btn btn-util btn-disabled" style="background:#334155; color:#fff;" onclick="window.openImpactPlayerModal()">⚡ IMPACT</button>
-            <button id="penaltyBtn" class="btn btn-util" style="background:#7f1d1d; color:#fff;" onclick="window.choosePenalty()">⚠️ PENALTY</button>
+            <button id="editBallBtn" class="btn btn-util" style="background:#1e3a5f; color:#fff;" onclick="window.openEditOverBalls()">✏️ EDIT BALL</button>
+            <button id="penaltyBtn" class="btn btn-util" style="background:#7f1d1d; color:#fff;" onclick="window.choosePenalty()">⚠️ NEG</button>
             <button class="btn btn-util" style="color:var(--red);" onclick="window.abortMatch()">ABORT</button>
         </div>
     </div>
@@ -1606,6 +1607,7 @@
         }
 
         function syncMatchState(d) {
+            d.updated_at = new Date().toISOString();
             matchData = d;
             updateUI();
             return matchDocRef.set(d).catch(function(err) {
@@ -2277,7 +2279,7 @@
             var pb = document.getElementById('penaltyBtn');
             if (pb) {
                 var pen = parseInt(d.pending_penalty) || 0;
-                pb.innerText = pen ? ('⚠️ PENALTY ' + pen + ' ✓') : '⚠️ PENALTY';
+                pb.innerText = pen ? ('⚠️ NEG ' + pen + ' ✓') : '⚠️ NEG';
             }
             Array.prototype.forEach.call(scorer.children, function(child) {
                 if (child === panel) return;
@@ -4980,12 +4982,56 @@ window.shareLiveMatchLink = function() {
         };
 
         // ---------- Penalty runs (batter's runs and team total, one ball) ----------
+        window.battingKey = function(d) {
+            var isA = (d.tossWinner === 'tA') ? (d.tossDecision === 'bat') : (d.tossDecision === 'bowl');
+            if (d.inn === 2) isA = !isA;
+            return isA ? 'tA' : 'tB';
+        };
+        window.battingBalls = function(d) { return parseInt(d[window.battingKey(d)].balls) || 0; };
+        window.deliverySig = function(d) {
+            var bk = window.battingKey(d);
+            return [d[bk].score, d[bk].balls, d[bk].wkts, d.inn].join('|');
+        };
+
+        // Deducts a penalty (positive amount) from the batter's runs and from the team total
+        window.applyPenaltyAmount = function(d, batter, pen) {
+            var bk = window.battingKey(d);
+            var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
+            d[bk].score = (parseInt(d[bk].score) || 0) - pen;
+            if (d[sk]) {
+                if (d[sk].batters && d[sk].batters[batter]) {
+                    d[sk].batters[batter].runs = (parseInt(d[sk].batters[batter].runs) || 0) - pen;
+                }
+                if (typeof d[sk].totalScore === 'number') d[sk].totalScore -= pen;
+            }
+            if (d.crr_bat_name === batter) d.crr_bat_runs = (parseInt(d.crr_bat_runs) || 0) - pen;
+            else if (d.non_bat_name === batter) d.non_bat_runs = (parseInt(d.non_bat_runs) || 0) - pen;
+            if (Array.isArray(d.curr_over) && d.curr_over.length) {
+                var n = d.curr_over.length - 1;
+                var last = String(d.curr_over[n]);
+                if (/^-?\d+$/.test(last)) d.curr_over[n] = String(parseInt(last, 10) - pen);
+            }
+        };
+
+        // PENALTY: choose the negative amount after recording the ball. It is applied to that ball.
         window.choosePenalty = function() {
             if (!isScoringAuthorized || !matchData) return;
-            if (matchData.match_status === 'completed' && !window.matchEditMode) return;
-            window.openPlayerPicker('Penalty runs (deducted from the batter)', ['-1', '-2', '-3', '-4', '-5', '-6'], '', function(v) {
+            if (matchData.match_status === 'completed' && !window.matchEditMode && !window.innBreakEditing) return;
+            var lb = matchData.last_ball;
+            if (!lb || !lb.batter || lb.penalized || lb.count !== window.battingBalls(matchData)) {
+                return alert("Record the ball first (run, dot, wide, no-ball or wicket), then tap PENALTY.");
+            }
+            window.openPlayerPicker('Negative runs (deducted from the batter)', ['-1', '-2', '-3', '-4', '-5', '-6'], '', function(v) {
+                var pen = Math.abs(parseInt(v, 10));
                 var d = JSON.parse(JSON.stringify(matchData));
-                d.pending_penalty = parseInt(v, 10);
+                var l = d.last_ball;
+                if (!l || l.penalized || l.count !== window.battingBalls(d)) {
+                    return alert("The ball has changed. Please record the ball again and tap PENALTY.");
+                }
+                window.applyPenaltyAmount(d, l.batter, pen);
+                l.penalized = true;
+                d.pending_penalty = 0;
+                if (d.match_status === 'completed') window.recomputeMatchResult(d);
                 syncMatchState(d);
             });
         };
@@ -5008,40 +5054,116 @@ window.shareLiveMatchLink = function() {
             }
         };
 
-        // Wrap the scoring function: if a penalty is pending, apply it to the same delivery
+        // Remember the last recorded ball and every ball of the current over (for NEG and EDIT BALL)
         (function() {
-            var origHandle = window.handleAction;
-            window.handleAction = function(val, type) {
-                var pen = Math.abs((matchData && parseInt(matchData.pending_penalty)) || 0);
-                if (!pen || !matchData) return origHandle.apply(this, arguments);
-
-                var striker0 = matchData.crr_bat_name;
-                var before = matchData.last_state;
-                origHandle.apply(this, arguments);
-                if (!matchData || matchData.last_state === before) return; // delivery was not recorded
-
-                var m = JSON.parse(JSON.stringify(matchData));
-                m.pending_penalty = 0;
-                var isA = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
-                if (m.inn === 2) isA = !isA;
-                var tk = isA ? 'tA' : 'tB';
-                var sk = m.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
-
-                m[tk].score = (parseInt(m[tk].score) || 0) - pen;
-                if (m[sk]) {
-                    if (m[sk].batters && m[sk].batters[striker0]) m[sk].batters[striker0].runs -= pen;
-                    if (typeof m[sk].totalScore === 'number') m[sk].totalScore -= pen;
-                }
-                if (m.crr_bat_name === striker0) m.crr_bat_runs = (parseInt(m.crr_bat_runs) || 0) - pen;
-                else if (m.non_bat_name === striker0) m.non_bat_runs = (parseInt(m.non_bat_runs) || 0) - pen;
-
-                if (Array.isArray(m.curr_over) && m.curr_over.length) {
-                    var last = String(m.curr_over[m.curr_over.length - 1]);
-                    if (/^-?\d+$/.test(last)) m.curr_over[m.curr_over.length - 1] = String(parseInt(last, 10) - pen);
-                }
-                if (m.match_status === 'completed') window.recomputeMatchResult(m);
-                syncMatchState(m);
+            var wrap = function(name, editableCall) {
+                var orig = window[name];
+                if (typeof orig !== 'function') return;
+                window[name] = function(val, type) {
+                    if (!matchData) return orig.apply(this, arguments);
+                    var before = window.deliverySig(matchData);
+                    var batter0 = matchData.crr_bat_name;
+                    var bowler0 = matchData.crr_bowl;
+                    var r = orig.apply(this, arguments);
+                    if (!matchData || window.deliverySig(matchData) === before) return r;
+                    var d = JSON.parse(JSON.stringify(matchData));
+                    d.last_ball = { batter: batter0, count: window.battingBalls(d), penalized: false };
+                    d.pending_penalty = 0;
+                    var over = Array.isArray(d.curr_over) ? d.curr_over : [];
+                    if (!Array.isArray(d.over_balls) || over.length <= 1 || d.over_balls.length !== over.length - 1) {
+                        d.over_balls = [];
+                    }
+                    if (over.length > 0) {
+                        var isRun = editableCall && /^[0-6]$/.test(String(val));
+                        d.over_balls.push({ batter: batter0, bowler: bowler0, runs: isRun ? parseInt(val, 10) : null, editable: !!isRun });
+                    }
+                    if (d.match_status === 'completed') window.recomputeMatchResult(d);
+                    syncMatchState(d);
+                    return r;
+                };
             };
+            wrap('handleAction', true);
+            wrap('confirmStructuredDismissal', false);
+        })();
+
+        // ---------- Edit a ball in the current over ----------
+        window.openEditOverBalls = function() {
+            if (!isScoringAuthorized || !matchData) return;
+            var over = matchData.curr_over || [];
+            var list = matchData.over_balls || [];
+            if (list.length === 0 || list.length !== over.length) return alert("No balls in this over to edit yet.");
+            var opts = list.map(function(b, i) {
+                return 'Ball ' + (i + 1) + ' — ' + (b.editable ? (b.runs + ' runs') : String(over[i]));
+            });
+            window.openPlayerPicker('Select a ball to edit (current over)', opts, '', function(v) {
+                var idx = parseInt(v.split(' ')[1], 10) - 1;
+                var b = (matchData.over_balls || [])[idx];
+                if (!b || !b.editable) return alert("Only plain run balls (0 to 6) can be edited here.");
+                window.openPlayerPicker('New runs for Ball ' + (idx + 1), ['0', '1', '2', '3', '4', '5', '6'], String(b.runs), function(nv) {
+                    window.applyBallEdit(idx, parseInt(nv, 10));
+                });
+            });
+        };
+
+        window.applyBallEdit = function(idx, newRuns) {
+            if (!matchData) return;
+            var d = JSON.parse(JSON.stringify(matchData));
+            var b = (d.over_balls || [])[idx];
+            var tag = String((d.curr_over || [])[idx]);
+            if (!b || !b.editable || !/^\d$/.test(tag)) return alert("This ball cannot be edited.");
+            var diff = newRuns - (parseInt(b.runs, 10) || 0);
+            if (diff === 0) return;
+            var bk = window.battingKey(d);
+            var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
+            d[bk].score = (parseInt(d[bk].score) || 0) + diff;
+            if (d[sk]) {
+                if (d[sk].batters && d[sk].batters[b.batter]) {
+                    d[sk].batters[b.batter].runs = (parseInt(d[sk].batters[b.batter].runs) || 0) + diff;
+                }
+                if (d[sk].bowlers && d[sk].bowlers[b.bowler]) {
+                    d[sk].bowlers[b.bowler].runs = (parseInt(d[sk].bowlers[b.bowler].runs) || 0) + diff;
+                }
+                if (typeof d[sk].totalScore === 'number') d[sk].totalScore += diff;
+            }
+            if (d.crr_bat_name === b.batter) d.crr_bat_runs = (parseInt(d.crr_bat_runs) || 0) + diff;
+            else if (d.non_bat_name === b.batter) d.non_bat_runs = (parseInt(d.non_bat_runs) || 0) + diff;
+            d.curr_over[idx] = String(newRuns);
+            b.runs = newRuns;
+            if (d.match_status === 'completed') window.recomputeMatchResult(d);
+            syncMatchState(d);
+            alert('Ball ' + (idx + 1) + ' changed to ' + newRuns + ' run(s).');
+        };
+
+        // ---------- Live hub: show when the score was last updated ----------
+        (function() {
+            var orig = window.renderLiveHubCards;
+            window.renderLiveHubCards = function() {
+                var r = orig.apply(this, arguments);
+                var box = document.getElementById('liveHubContainer');
+                if (!box) return r;
+                var latest = null;
+                Object.keys(liveHubPitchCache).forEach(function(k) {
+                    var u = liveHubPitchCache[k] && liveHubPitchCache[k].updated_at;
+                    if (u && (!latest || u > latest)) latest = u;
+                });
+                var old = document.getElementById('hubUpdatedAt');
+                if (old && old.parentNode) old.parentNode.removeChild(old);
+                var div = document.createElement('div');
+                div.id = 'hubUpdatedAt';
+                if (latest) {
+                    var ageMin = (Date.now() - new Date(latest).getTime()) / 60000;
+                    var t = new Date(latest).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    div.style.cssText = 'font-size:0.78rem; margin:6px 0; text-align:center; color:' + (ageMin > 3 ? '#fbbf24' : '#94a3b8') + ';';
+                    div.innerText = 'Last updated: ' + t + (ageMin > 3 ? '  ⚠️ score may be delayed' : '');
+                }
+                box.insertBefore(div, box.firstChild);
+                return r;
+            };
+            // Refresh the time while the live hub is open
+            setInterval(function() {
+                var v = document.getElementById('viewLiveHub');
+                if (v && !v.classList.contains('hidden')) window.renderLiveHubCards();
+            }, 15000);
         })();
 
         // ---------- Back to live scoring from the match-end panel ----------
