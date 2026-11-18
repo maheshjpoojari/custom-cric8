@@ -965,6 +965,7 @@
          VIEW 8: LIVE SCORER & SPECTATOR SCOREBOARD
          ========================================== -->
     <div id="viewScorer" class="app-view hidden">
+        <div id="syncBanner" style="display:none; background:#7c2d12; color:#fff; font-weight:800; font-size:0.78rem; text-align:center; padding:8px 10px; border-radius:10px; margin:8px 0;"></div>
         <div id="matchEndPanel" class="hidden" style="background:#0f172a; border:2px solid var(--gold); border-radius:14px; padding:16px; margin:10px 0; text-align:center;">
             <div id="matchEndHeading" style="color:var(--gold); font-weight:900; font-size:0.85rem; letter-spacing:1px;">MATCH COMPLETED</div>
             <div id="matchEndWinner" style="color:#e2e8f0; font-weight:900; font-size:1.05rem; margin:8px 0 14px;"></div>
@@ -1302,6 +1303,9 @@
             firebase.initializeApp(firebaseConfig);
         }
         var db = firebase.firestore();
+        db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+            console.warn('Offline storage not available:', err && err.code ? err.code : err);
+        });
         var auth = firebase.auth();
         auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(function() {});
 
@@ -1606,12 +1610,36 @@
             });
         }
 
+        window.syncPending = 0;
+        window.updateSyncBanner = function() {
+            var b = document.getElementById('syncBanner');
+            if (!b) return;
+            if (!navigator.onLine) {
+                b.innerText = '⚠️ OFFLINE: score is saved on this device and will be sent when the connection returns';
+                b.style.display = 'block';
+            } else if (window.syncPending > 0) {
+                b.innerText = '⏳ Sending score to the live hub...';
+                b.style.display = 'block';
+            } else {
+                b.style.display = 'none';
+            }
+        };
+        window.addEventListener('online', function() { window.updateSyncBanner(); });
+        window.addEventListener('offline', function() { window.updateSyncBanner(); });
+
         function syncMatchState(d) {
             d.updated_at = new Date().toISOString();
             matchData = d;
             updateUI();
-            return matchDocRef.set(d).catch(function(err) {
-                console.warn("Firestore write fallback:", err.message);
+            window.syncPending++;
+            window.updateSyncBanner();
+            return matchDocRef.set(d).then(function() {
+                window.syncPending = Math.max(0, window.syncPending - 1);
+                window.updateSyncBanner();
+            }).catch(function(err) {
+                window.syncPending = Math.max(0, window.syncPending - 1);
+                window.updateSyncBanner();
+                console.warn("Firestore write fallback:", err && err.message ? err.message : err);
             });
         }
 
@@ -3954,51 +3982,111 @@
             });
         };
 
+        window.normTourney = function(t) {
+            return (t === 'icl_2026' || t === 'icl' || !t) ? 'FZ_ICL_2026' : t;
+        };
+
+        // Works out each fixture's status from the match archive: played, aborted, or upcoming
+        window.fixtureStatus = function(f, archive) {
+            var key = [f.team1, f.team2].sort().join('||');
+            var recs = archive.filter(function(m) {
+                if (!m.tA || !m.tB) return false;
+                var mk = [m.tA.name, m.tB.name].sort().join('||');
+                return mk === key && window.normTourney(m.tournament) === window.normTourney(f.tournament);
+            }).sort(function(a, b) { return String(b.timestamp || '') < String(a.timestamp || '') ? -1 : 1; });
+            var done = recs.filter(function(m) { return String(m.match_status || '').toLowerCase() === 'completed'; });
+            if (done.length) return { status: 'played', result: done[0].winner || '' };
+            var ab = recs.filter(function(m) { return String(m.match_status || '').toLowerCase().indexOf('abort') === 0; });
+            if (ab.length) return { status: 'aborted', result: 'Aborted' };
+            return { status: 'upcoming', result: '' };
+        };
+
         window.renderScheduledFixtures = function() {
             var box = document.getElementById('fixturesListContainer');
             if (!box) return;
-            db.collection("fixtures").get().then(function(snap) {
+            Promise.all([db.collection("fixtures").get(), db.collection("match_history").get()]).then(function(res) {
                 var byId = {};
                 DEFAULT_ICL_FIXTURES.forEach(function(f) { byId[f.id] = f; });
-                snap.forEach(function(docSnap) {
+                res[0].forEach(function(docSnap) {
                     var data = docSnap.data();
-                    var key = data.id || docSnap.id;
-                    byId[key] = data;
+                    byId[data.id || docSnap.id] = Object.assign({}, byId[data.id || docSnap.id] || {}, data);
                 });
                 scheduledFixturesList = Object.keys(byId).map(function(k) { return byId[k]; });
+                var archive = [];
+                res[1].forEach(function(docSnap) {
+                    var x = docSnap.data();
+                    if (!x.reset_marker) archive.push(x);
+                });
+                window.fixtureArchive = archive;
                 drawFixturesList(box);
             }).catch(function() {
                 drawFixturesList(box);
             });
         };
 
-function drawFixturesList(box) {
+        window.removeAbortedFixture = function(id) {
+            if (!confirm("Do you want to remove this aborted fixture from the fixtures list?")) return;
+            db.collection("fixtures").doc(id).set({ id: id, removed: true, removedAt: new Date().toISOString() }, { merge: true })
+                .then(function() {
+                    var item = scheduledFixturesList.find(function(f) { return f.id === id; });
+                    if (item) item.removed = true;
+                    window.renderScheduledFixtures();
+                }).catch(function(err) {
+                    alert("Could not remove the fixture: " + (err && err.message ? err.message : err));
+                });
+        };
+
+        function drawFixturesList(box) {
             var filterEl = document.getElementById('fixtureTourneyFilter');
             var filter = filterEl ? filterEl.value : 'FZ_ICL_2026';
-            
+            var archive = window.fixtureArchive || [];
+
             var list = scheduledFixturesList.filter(function(f) {
+                if (f.removed) return false;
                 if (filter === 'all') return true;
-                var fTourney = (f.tournament || 'FZ_ICL_2026');
-                // Allow flexible matching for ICL
-                if (filter === 'FZ_ICL_2026' && fTourney === 'FZ_ICL_2026') return true;
-                return fTourney === filter;
+                return window.normTourney(f.tournament) === window.normTourney(filter);
             });
 
             if (list.length === 0) {
-                box.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.8rem;">No scheduled fixtures found for <b>' + (filterEl ? filterEl.options[filterEl.selectedIndex].text : filter) + '</b>.<br><span style="font-size:0.72rem; color:#475569;">You can schedule a new fixture using the form below.</span></div>';
+                box.innerHTML = '<div style="text-align:center; padding:16px; color:#64748b; font-size:0.8rem;">No fixtures found for <b>' + (filterEl ? filterEl.options[filterEl.selectedIndex].text : filter) + '</b>.</div>';
                 return;
             }
 
-            box.innerHTML = list.map(function(f) {
+            var groups = { upcoming: [], played: [], aborted: [] };
+            list.forEach(function(f) {
+                var st = window.fixtureStatus(f, archive);
+                groups[st.status].push({ f: f, st: st });
+            });
+
+            var card = function(item, mode) {
+                var f = item.f;
                 var headerLeft = f.matchNo ? (f.matchNo + " • " + (f.date || "") + " (" + (f.time || "") + ")") : (f.pitch || 'pitch_1').toUpperCase();
                 var venueTag = f.venue || "FZC Cricket Court";
-                return '<div class="fixture-card">' +
-                    '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--gold); font-weight:800;">' +
-                    '<span>' + headerLeft + '</span><span>' + venueTag + '</span></div>' +
-                    '<div style="font-size:0.92rem; font-weight:900; color:#fff; margin:6px 0;">' + f.team1 + ' vs ' + f.team2 + '</div>' +
-                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button>' +
-                    '</div>';
-            }).join('');
+                var head = '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--gold); font-weight:800;">' +
+                    '<span>' + headerLeft + '</span><span>' + venueTag + '</span></div>';
+                var title = '<div style="font-size:0.92rem; font-weight:900; color:#fff; margin:6px 0;">' + f.team1 + ' vs ' + f.team2 + '</div>';
+                if (mode === 'played') {
+                    return '<div class="fixture-card" style="opacity:0.55; filter:grayscale(0.6);">' + head + title +
+                        '<div style="font-size:0.78rem; color:#94a3b8; font-weight:700;">✅ PLAYED' + (item.st.result ? ' — ' + item.st.result : '') + '</div></div>';
+                }
+                if (mode === 'aborted') {
+                    return '<div class="fixture-card" style="border-color:#f97316;">' + head + title +
+                        '<div style="font-size:0.78rem; color:#fb923c; font-weight:800; margin-bottom:8px;">⛔ ABORTED</div>' +
+                        '<button class="btn btn-red" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.removeAbortedFixture(\'' + f.id + '\')">🗑️ REMOVE FROM FIXTURES</button></div>';
+                }
+                return '<div class="fixture-card">' + head + title +
+                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button></div>';
+            };
+
+            var section = function(title, items, mode) {
+                if (!items.length) return '';
+                return '<div style="font-weight:900; color:#38bdf8; margin:10px 0 6px; font-size:0.85rem;">' + title + ' (' + items.length + ')</div>' +
+                    items.map(function(it) { return card(it, mode); }).join('');
+            };
+
+            box.innerHTML = section('UPCOMING', groups.upcoming, 'upcoming') +
+                section('PLAYED', groups.played, 'played') +
+                section('ABORTED', groups.aborted, 'aborted');
         }
 
         window.launchScheduledFixture = function(t1, t2, fmt, pitch, tourney) {
@@ -5155,7 +5243,10 @@ window.shareLiveMatchLink = function() {
                 if (!box) return r;
                 var latest = null;
                 Object.keys(liveHubPitchCache).forEach(function(k) {
-                    var u = liveHubPitchCache[k] && liveHubPitchCache[k].updated_at;
+                    var m = liveHubPitchCache[k];
+                    var st = String((m && m.match_status) || '').toLowerCase();
+                    var inProgress = m && st !== 'completed' && st.indexOf('abort') !== 0;
+                    var u = inProgress && m.updated_at;
                     if (u && (!latest || u > latest)) latest = u;
                 });
                 var old = document.getElementById('hubUpdatedAt');
