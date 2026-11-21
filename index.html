@@ -4061,6 +4061,7 @@
                     var x = docSnap.data();
                     if (!x.reset_marker) archive.push(x);
                 });
+                archive.forEach(window.reclassifyStage2);
                 window.fixtureArchive = archive;
                 drawFixturesList(box);
             }).catch(function() {
@@ -4266,6 +4267,7 @@
                 });
                 window.standingsMarkers = markers;
                 window.standingsResetAt = window.computeResetCutoffs(markers);
+                arr.forEach(window.reclassifyStage2);
                 archivedMatchesCache = arr;
                 window.switchStandingsTab('points');
             }).catch(function() {
@@ -5449,6 +5451,14 @@ window.shareLiveMatchLink = function() {
                 '<div style="margin-top:12px; font-size:0.8rem;"><b style="color:#4ade80;">Still in the plate:</b> ' + (alive.length ? alive.join(', ') : '-') + '</div>' +
                 '<div style="margin-top:6px; font-size:0.8rem;"><b style="color:#f87171;">Eliminated:</b> ' + (elim.length ? elim.join(', ') : '-') + '</div>' +
                 '<div style="margin-top:6px; font-size:0.8rem;"><b style="color:#94a3b8;">Out of the tournament:</b> Stallions, Reservation Thunders, Old Monks</div>';
+        };
+        // The 20 Nov MSD v Flying Legends match was played before Stage 2 and is Super Six fixture 1.
+        window.reclassifyStage2 = function(m) {
+            if (!m || m.tournament !== 'FZ_ICL_2026' || !m.tA || !m.tB) return m;
+            var pair = [m.tA.name, m.tB.name].sort().join('||');
+            var wanted = ['Flying Legends', 'MSD Engineering Warriors'].sort().join('||');
+            if (String(m.timestamp || '').substring(0, 10) === '2026-11-20' && pair === wanted) m.tournament = 'FZ_ICL_SS';
+            return m;
         };
     </script>
 </body>
