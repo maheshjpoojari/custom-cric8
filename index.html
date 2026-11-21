@@ -4648,7 +4648,7 @@ window.shareLiveMatchLink = function() {
             window.navigateView = function() {
                 var r = origNav.apply(this, arguments);
                 window.refreshAdminVisibility();
-                if (viewId === 'viewScorer') window.applySpectatorView();
+                if (arguments[0] === 'viewScorer') window.applySpectatorView();
                 return r;
             };
         })();
@@ -4818,7 +4818,8 @@ window.shareLiveMatchLink = function() {
         })();
         // ---------- Tournament Excel export (cumulative, one workbook) ----------
         window.exportMatchesForTournament = function(t) {
-            var aliases = (t === 'FZ_ICL_2026') ? ['FZ_ICL_2026', 'icl_2026', 'icl'] : [t];
+            var iclAll = ['FZ_ICL_2026', 'FZ_ICL_SS', 'FZ_ICL_PLATE', 'icl_2026', 'icl'];
+            var aliases = (['FZ_ICL_2026', 'FZ_ICL_SS', 'FZ_ICL_PLATE'].indexOf(t) !== -1) ? iclAll : [t];
             return (archivedMatchesCache || []).filter(function(m) {
                 return m.match_status === 'completed' && aliases.indexOf(m.tournament) !== -1;
             }).sort(function(a, b) { return String(a.timestamp || '') < String(b.timestamp || '') ? -1 : 1; });
@@ -4840,7 +4841,7 @@ window.shareLiveMatchLink = function() {
                 var sc = function(s) { return (s.totalScore || 0) + '/' + (s.totalWkts || 0) + ' (' + Math.floor((s.totalBalls || 0) / 6) + '.' + ((s.totalBalls || 0) % 6) + ')'; };
 
                 summary.push({
-                    'Match No': no, 'Date': date, 'Tournament': t,
+                    'Match No': no, 'Date': date, 'Tournament': window.stageLabel(m.tournament),
                     'Innings 1 Team': team1Bat, 'Innings 1 Score': sc(sc1),
                     'Innings 2 Team': team2Bat, 'Innings 2 Score': sc(sc2),
                     'Result': m.winner || '', 'Overs': ov
@@ -5061,7 +5062,11 @@ window.shareLiveMatchLink = function() {
                     return alert('No completed matches found for this tournament (' + t + '). Open Standings first, then try again.');
                 }
                 var built = window.buildTournamentWorkbook(t);
-                var standings = window.computeExportStandings(matches);
+                var s1Matches = matches.filter(function(m) { return ['FZ_ICL_2026', 'icl_2026', 'icl'].indexOf(m.tournament) !== -1; });
+                var ssMatches = matches.filter(function(m) { return m.tournament === 'FZ_ICL_SS'; });
+                var standings = window.computeExportStandings(s1Matches);
+                var standingsSS = window.computeExportStandings(ssMatches);
+                var combined = window.combinedPlayerRows(matches);
                 var leaders = window.computeExportLeaders(matches);
                 var tName = (filterEl && filterEl.options[filterEl.selectedIndex]) ? filterEl.options[filterEl.selectedIndex].text : t;
                 var today = new Date().toISOString().substring(0, 10);
@@ -5105,13 +5110,19 @@ window.shareLiveMatchLink = function() {
 
                 var sheets = [
                     window.xSheet('Dashboard', [170, 170, 90, 90, 90, 90], dash),
-                    window.xSheet('Standings', [200, 60, 60, 60, 70, 90],
+                    window.xSheet('Standings Stage 1', [200, 60, 60, 60, 70, 90],
                         window.xTableRows(standings, ['Team', 'P', 'W', 'L', 'Pts', 'NRR'])),
+                    window.xSheet('Standings Super Six', [200, 60, 60, 60, 70, 90],
+                        window.xTableRows(standingsSS, ['Team', 'P', 'W', 'L', 'Pts', 'NRR'])),
+                    window.xSheet('Orange Cap (Combined)', [170, 170, 70, 70, 70, 70, 70, 70, 70],
+                        window.xTableRows(combined.batters, ['Player', 'Team', 'Matches', 'Innings', 'Runs', 'Balls', 'Fours', 'Sixes', 'SR'])),
+                    window.xSheet('Purple Cap (Combined)', [170, 170, 70, 70, 70, 70, 80],
+                        window.xTableRows(combined.bowlers, ['Player', 'Team', 'Matches', 'Overs', 'Runs', 'Wickets', 'Economy'])),
                     window.xSheet('Match Summary', [70, 90, 180, 110, 180, 110, 260, 60],
                         window.xTableRows(built.summary, ['Match No', 'Date', 'Tournament', 'Innings 1 Team', 'Innings 1 Score', 'Innings 2 Team', 'Innings 2 Score', 'Result', 'Overs'])),
-                    window.xSheet('Batting', [70, 90, 70, 180, 160, 60, 60, 50, 50, 70, 80],
+                    window.xSheet('Batting by Match', [70, 90, 70, 180, 160, 60, 60, 50, 50, 70, 80],
                         window.xTableRows(built.batting, ['Match No', 'Date', 'Innings', 'Batting Team', 'Batter', 'Runs', 'Balls', '4s', '6s', 'SR', 'Status'])),
-                    window.xSheet('Bowling', [70, 90, 70, 180, 160, 70, 60, 70, 80],
+                    window.xSheet('Bowling by Match', [70, 90, 70, 180, 160, 70, 60, 70, 80],
                         window.xTableRows(built.bowling, ['Match No', 'Date', 'Innings', 'Bowling Team', 'Bowler', 'Overs', 'Runs', 'Wickets', 'Economy']))
                 ];
 
@@ -5479,6 +5490,61 @@ window.shareLiveMatchLink = function() {
                 if (cut && String(m.timestamp || '') < cut) return false;
                 return true;
             });
+        };
+        window.stageLabel = function(t) {
+            if (t === 'FZ_ICL_SS') return 'Stage 2 - Super Six';
+            if (t === 'FZ_ICL_PLATE') return 'Stage 2 - Plate Cup';
+            if (t === 'icl_2026' || t === 'icl') return 'Stage 1';
+            return t === 'FZ_ICL_2026' ? 'Stage 1' : (t || '');
+        };
+
+        // Player totals across all ICL stages (Orange Cap / Purple Cap figures)
+        window.combinedPlayerRows = function(matches) {
+            var bat = {}, bowl = {};
+            matches.forEach(function(m, mi) {
+                if (!m.tA || !m.tB) return;
+                var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
+                var batTeam = { 1: t1Bats ? m.tA.name : m.tB.name, 2: t1Bats ? m.tB.name : m.tA.name };
+                var bowlTeam = { 1: t1Bats ? m.tB.name : m.tA.name, 2: t1Bats ? m.tA.name : m.tB.name };
+                [1, 2].forEach(function(i) {
+                    var sc = m[i === 1 ? 'inn1_scorecard' : 'inn2_scorecard'];
+                    if (!sc) return;
+                    Object.keys(sc.batters || {}).forEach(function(p) {
+                        var b = sc.batters[p];
+                        var k = p + '||' + batTeam[i];
+                        if (!bat[k]) bat[k] = { Player: p, Team: batTeam[i], Matches: {}, Innings: 0, Runs: 0, Balls: 0, Fours: 0, Sixes: 0, NotOut: 0 };
+                        bat[k].Matches[mi] = true;
+                        bat[k].Innings += 1;
+                        bat[k].Runs += b.runs || 0;
+                        bat[k].Balls += b.balls || 0;
+                        bat[k].Fours += b.fours || 0;
+                        bat[k].Sixes += b.sixes || 0;
+                        if (!(b.dismissals > 0)) bat[k].NotOut += 1;
+                    });
+                    Object.keys(sc.bowlers || {}).forEach(function(p) {
+                        var b = sc.bowlers[p];
+                        var k = p + '||' + bowlTeam[i];
+                        if (!bowl[k]) bowl[k] = { Player: p, Team: bowlTeam[i], Matches: {}, Balls: 0, Runs: 0, Wickets: 0 };
+                        bowl[k].Matches[mi] = true;
+                        bowl[k].Balls += b.balls || 0;
+                        bowl[k].Runs += b.runs || 0;
+                        bowl[k].Wickets += b.wkts || 0;
+                    });
+                });
+            });
+            var batters = Object.keys(bat).map(function(k) {
+                var b = bat[k];
+                return { Player: b.Player, Team: b.Team, Matches: Object.keys(b.Matches).length, Innings: b.Innings,
+                    Runs: b.Runs, Balls: b.Balls, Fours: b.Fours, Sixes: b.Sixes, NotOuts: b.NotOut,
+                    SR: b.Balls > 0 ? Math.round(b.Runs / b.Balls * 1000) / 10 : 0 };
+            }).sort(function(a, b) { return b.Runs - a.Runs || b.SR - a.SR; });
+            var bowlers = Object.keys(bowl).map(function(k) {
+                var b = bowl[k];
+                return { Player: b.Player, Team: b.Team, Matches: Object.keys(b.Matches).length,
+                    Overs: Math.floor(b.Balls / 6) + '.' + (b.Balls % 6), Runs: b.Runs, Wickets: b.Wickets,
+                    Economy: b.Balls > 0 ? Math.round(b.Runs / (b.Balls / 6) * 100) / 100 : 0 };
+            }).sort(function(a, b) { return b.Wickets - a.Wickets || a.Economy - b.Economy; });
+            return { batters: batters, bowlers: bowlers };
         };
     </script>
 </body>
