@@ -4332,7 +4332,14 @@ window.switchStandingsTab = function(tab) {
             var filterEl = document.getElementById('standingsTourneyFilter');
             var selectedTourney = filterEl ? filterEl.value : 'FZ_ICL_2026';
 
-            if (selectedTourney === 'FZ_ICL_PLATE') { window.renderPlateKnockout(box); return; }
+            var isPlateView = selectedTourney === 'FZ_ICL_PLATE';
+            ['stdTabPoints', 'stdTabOrange', 'stdTabPurple'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', isPlateView);
+            });
+            var fieldingBtn = document.getElementById('stdTabFielding');
+            if (fieldingBtn) fieldingBtn.classList.toggle('hidden', isPlateView || isIcl);
+            if (isPlateView) { window.renderPlateKnockout(box); return; }
 
             var matches = archivedMatchesCache.filter(function(m) {
                 if (m.match_status !== 'completed') return false;
@@ -4450,7 +4457,7 @@ window.switchStandingsTab = function(tab) {
                 box.innerHTML = html;
             } else if (tab === 'orange') {
                 var batMap = {};
-                matches.forEach(function(m) {
+                window.capMatchesFor(selectedTourney).forEach(function(m) {
                     if (!m.tA || !m.tB) return;
                     var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
                     var batTeam = { inn1_scorecard: t1Bats ? m.tA.name : m.tB.name, inn2_scorecard: t1Bats ? m.tB.name : m.tA.name };
@@ -4479,7 +4486,7 @@ window.switchStandingsTab = function(tab) {
                 box.innerHTML = bHtml;
             } else if (tab === 'purple') {
                 var bowlMap = {};
-                matches.forEach(function(m) {
+                window.capMatchesFor(selectedTourney).forEach(function(m) {
                     if (!m.tA || !m.tB) return;
                     var t1Bats = (m.tossWinner === 'tA') ? (m.tossDecision === 'bat') : (m.tossDecision === 'bowl');
                     var bowlTeam = { inn1_scorecard: t1Bats ? m.tB.name : m.tA.name, inn2_scorecard: t1Bats ? m.tA.name : m.tB.name };
@@ -5459,6 +5466,19 @@ window.shareLiveMatchLink = function() {
             var wanted = ['Flying Legends', 'MSD Engineering Warriors'].sort().join('||');
             if (String(m.timestamp || '').substring(0, 10) === '2026-11-20' && pair === wanted) m.tournament = 'FZ_ICL_SS';
             return m;
+        };
+        // Caps are one competition across all ICL stages: a player's runs and wickets carry over
+        window.capMatchesFor = function(selectedTourney) {
+            var icl = ['FZ_ICL_2026', 'FZ_ICL_SS', 'FZ_ICL_PLATE'];
+            var group = icl.indexOf(selectedTourney) !== -1 ? icl : [selectedTourney];
+            return (archivedMatchesCache || []).filter(function(m) {
+                if (m.match_status !== 'completed') return false;
+                var t = m.tournament || 'FZ_ICL_2026';
+                if (group.indexOf(t) === -1) return false;
+                var cut = (window.standingsResetAt || {})[t];
+                if (cut && String(m.timestamp || '') < cut) return false;
+                return true;
+            });
         };
     </script>
 </body>
