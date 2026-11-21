@@ -653,6 +653,8 @@
             <label>Tournament</label>
             <select id="adminTourneySelect" class="input-field" onchange="window.refreshAdminStatus()">
                 <option value="FZ_ICL_2026">FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                <option value="FZ_ICL_SS">ICL Stage 2 - Champions (Super Six)</option>
+                <option value="FZ_ICL_PLATE">ICL Stage 2 - Plate Cup (Knockout)</option>
                 <option value="corporate">Corporate Cric-8 Cup</option>
                 <option value="premier">Weekend Premier League</option>
                 <option value="friendly">Friendly / Exhibition</option>
@@ -744,6 +746,8 @@
                 <label>Filter by Tournament</label>
                 <select id="fixtureTourneyFilter" class="input-field" onchange="window.renderScheduledFixtures()">
                     <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                    <option value="FZ_ICL_SS">ICL Stage 2 - Champions (Super Six)</option>
+                    <option value="FZ_ICL_PLATE">ICL Stage 2 - Plate Cup (Knockout)</option>
                     <option value="all">All Tournaments</option>
                     <option value="corporate">Corporate Cric-8 Cup</option>
                     <option value="premier">Weekend Premier League</option>
@@ -804,6 +808,8 @@
                 <label>Filter by Tournament</label>
                 <select id="standingsTourneyFilter" class="input-field" onchange="window.switchStandingsTab(window.activeStandingsTab || 'points')">
                     <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                    <option value="FZ_ICL_SS">ICL Stage 2 - Champions (Super Six)</option>
+                    <option value="FZ_ICL_PLATE">ICL Stage 2 - Plate Cup (Knockout)</option>
                     <option value="corporate">Corporate Cric-8 Cup</option>
                     <option value="premier">Weekend Premier League</option>
                     <option value="friendly">Friendly / Exhibition</option>
@@ -863,6 +869,8 @@
                     <label>League / Event</label>
                     <select id="selectTournament" class="input-field" onchange="window.applyFormatForTournament(); window.onFormatSelectChange();">
                         <option value="FZ_ICL_2026" selected>FLYDUBAI’s - Inter-department Cricket League (ICL)</option>
+                        <option value="FZ_ICL_SS">ICL Stage 2 - Champions (Super Six)</option>
+                        <option value="FZ_ICL_PLATE">ICL Stage 2 - Plate Cup (Knockout)</option>
                         <option value="corporate">Corporate Cric-8 Cup</option>
                         <option value="premier">Weekend Premier League</option>
                         <option value="friendly">Friendly / Custom</option>
@@ -1404,7 +1412,26 @@
             { id: "FZ_ICL_2026_m23", matchNo: "Stage 1 M23", date: "18 Nov 2026", time: "6.20PM", team1: "Operation Stars", team2: "MSD Engineering Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_2026", status: "Scheduled" },
             { id: "FZ_ICL_2026_m24", matchNo: "Stage 1 M24", date: "18 Nov 2026", time: "7.00PM", team1: "Banana Blasters", team2: "Old Monks", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_2026", status: "Scheduled" },
             { id: "FZ_ICL_2026_m25", matchNo: "Stage 1 M25", date: "19 Nov 2026", time: "5.00PM", team1: "BMD Warriors", team2: "Commercial Renegades", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_2026", status: "Scheduled" },
-            { id: "FZ_ICL_2026_m26", matchNo: "Stage 1 M26", date: "19 Nov 2026", time: "5.40 PM", team1: "MSD Engineering Warriors", team2: "Sky XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_2026", status: "Scheduled" }
+            { id: "FZ_ICL_2026_m26", matchNo: "Stage 1 M26", date: "19 Nov 2026", time: "5.40 PM", team1: "MSD Engineering Warriors", team2: "Sky XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_2026", status: "Scheduled" },
+            { id: "FZ_ICL_SS_01", matchNo: "Super Six SS1", date: "20 Nov 2026", time: "5.00PM", team1: "MSD Engineering Warriors", team2: "Flying Legends", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_02", matchNo: "Super Six SS2", date: "23 Nov 2026", time: "5.00PM", team1: "Flying Legends", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_03", matchNo: "Super Six SS3", date: "23 Nov 2026", time: "5.40PM", team1: "Operation Stars", team2: "Commercial Renegades", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_04", matchNo: "Super Six SS4", date: "23 Nov 2026", time: "6.20PM", team1: "Operation Stars", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_05", matchNo: "Super Six SS5", date: "23 Nov 2026", time: "7.00PM", team1: "Flying Legends", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_06", matchNo: "Super Six SS6", date: "23 Nov 2026", time: "7.40PM", team1: "Flying Legends", team2: "Operation Stars", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_07", matchNo: "Super Six SS7", date: "24 Nov 2026", time: "5.00PM", team1: "Oceans XI", team2: "MSD Engineering Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_08", matchNo: "Super Six SS8", date: "24 Nov 2026", time: "5.40PM", team1: "Commercial Renegades", team2: "Flying Legends", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_09", matchNo: "Super Six SS9", date: "24 Nov 2026", time: "6.20PM", team1: "Oceans XI", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_10", matchNo: "Super Six SS10", date: "24 Nov 2026", time: "7.00PM", team1: "Commercial Renegades", team2: "MSD Engineering Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_11", matchNo: "Super Six SS11", date: "25 Nov 2026", time: "5.00PM", team1: "MSD Engineering Warriors", team2: "Operation Stars", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_12", matchNo: "Super Six SS12", date: "25 Nov 2026", time: "5.40PM", team1: "Commercial Renegades", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_13", matchNo: "Super Six SS13", date: "25 Nov 2026", time: "6.20PM", team1: "Operation Stars", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_14", matchNo: "Super Six SS14", date: "25 Nov 2026", time: "7.00PM", team1: "MSD Engineering Warriors", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_15", matchNo: "Super Six SS15", date: "25 Nov 2026", time: "7.40PM", team1: "Commercial Renegades", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_PLATE_1", matchNo: "Plate QF1 (winner to Final)", date: "21 Nov 2026", time: "7.00AM", team1: "Sky XI", team2: "BMD Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
+            { id: "FZ_ICL_PLATE_2", matchNo: "Plate QF2 (winner plays Airport Chargers)", date: "21 Nov 2026", time: "7.40AM", team1: "Banana Blasters", team2: "Airport Challengers", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
+            { id: "FZ_ICL_PLATE_3", matchNo: "Plate Semi-Final", date: "21 Nov 2026", time: "8.30AM", team1: "Airport Chargers", team2: "Winner of Plate QF2", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
+            { id: "FZ_ICL_PLATE_4", matchNo: "Plate Final", date: "TBD", time: "TBD", team1: "Winner of Plate QF1", team2: "Winner of Plate Semi-Final", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
         ];
 
         var uploadedTeams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
@@ -1782,7 +1809,7 @@
             var tEl = document.getElementById('selectTournament');
             var fEl = document.getElementById('rulesFormatSelect');
             if (!tEl || !fEl) return;
-            if (tEl.value === 'FZ_ICL_2026') {
+            if (['FZ_ICL_2026', 'FZ_ICL_SS', 'FZ_ICL_PLATE'].indexOf(tEl.value) !== -1) {
                 fEl.innerHTML = '';
                 fEl.add(new Option('Custom Cric-8 Pairs (8 Overs, -5 Wkt, 3-Dot -5, 2-Run Extras)', 'pairs'));
                 fEl.value = 'pairs';
@@ -2313,6 +2340,23 @@
                 if (child === panel) return;
                 child.style.pointerEvents = lock ? 'none' : '';
                 child.style.opacity = lock ? '0.35' : '';
+            });
+            window.applySpectatorView();
+        };
+
+        // Spectators (live hub / shared link) see only the score, overs and players.
+        // Scoring, archive, undo, penalty, edit and other controls are hidden for them.
+        window.applySpectatorView = function() {
+            if (!isSpectatorLockMode) return;
+            var scorer = document.getElementById('viewScorer');
+            if (!scorer) return;
+            var panel = document.getElementById('matchEndPanel');
+            if (panel) panel.classList.add('hidden');
+            var banner = document.getElementById('syncBanner');
+            if (banner) banner.style.display = 'none';
+            Array.prototype.forEach.call(scorer.querySelectorAll('button'), function(b) {
+                if (b.id === 'spectatorBackToHubBtn') return;
+                b.classList.add('hidden');
             });
         };
 
@@ -4267,7 +4311,7 @@
 window.switchStandingsTab = function(tab) {
             var tourneyEl = document.getElementById('standingsTourneyFilter');
             var currentTourney = tourneyEl ? tourneyEl.value : 'FZ_ICL_2026';
-            var isIcl = currentTourney === 'FZ_ICL_2026';
+            var isIcl = currentTourney === 'FZ_ICL_2026' || currentTourney === 'FZ_ICL_SS';
             var btnOrangeEl = document.getElementById('stdTabOrange');
             var btnPurpleEl = document.getElementById('stdTabPurple');
             var btnFieldingEl = document.getElementById('stdTabFielding');
@@ -4286,16 +4330,18 @@ window.switchStandingsTab = function(tab) {
             var filterEl = document.getElementById('standingsTourneyFilter');
             var selectedTourney = filterEl ? filterEl.value : 'FZ_ICL_2026';
 
+            if (selectedTourney === 'FZ_ICL_PLATE') { window.renderPlateKnockout(box); return; }
+
             var matches = archivedMatchesCache.filter(function(m) {
                 if (m.match_status !== 'completed') return false;
                 var resetCut = (window.standingsResetAt || {})[selectedTourney];
                 if (resetCut && String(m.timestamp || '') < resetCut) return false;
                 var mTourney = (m.tournament || 'FZ_ICL_2026');
-                if (isIcl && (mTourney === 'FZ_ICL_2026')) return true;
+                if (selectedTourney === 'FZ_ICL_2026' && mTourney === 'FZ_ICL_2026') return true;
                 return mTourney === selectedTourney;
             });
 
-            if (matches.length === 0) {
+            if (matches.length === 0 && selectedTourney !== 'FZ_ICL_SS') {
                 box.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">No completed matches found for this tournament filter.</div>';
                 return;
             }
@@ -4303,6 +4349,14 @@ window.switchStandingsTab = function(tab) {
             if (tab === 'points' && isIcl) {
                 var ICL_RULES = { win: 2, draw: 1, loss: 0, walkover: 2 };
                 var iclTable = {};
+                if (selectedTourney === 'FZ_ICL_SS') {
+                    scheduledFixturesList.forEach(function(f) {
+                        if (f.tournament !== 'FZ_ICL_SS') return;
+                        [f.team1, f.team2].forEach(function(n) {
+                            if (n && !iclTable[n]) iclTable[n] = { p: 0, w: 0, l: 0, pts: 0 };
+                        });
+                    });
+                }
                 matches.forEach(function(m) {
                     var nA = m.tA ? m.tA.name : "Team A";
                     var nB = m.tB ? m.tB.name : "Team B";
@@ -4363,6 +4417,7 @@ window.switchStandingsTab = function(tab) {
                 });
                 iclHtml += '</table>';
                 iclHtml += '<div style="font-size:0.72rem; color:#64748b; margin-top:8px; text-align:center;">Win 2 pts · Draw 1 pt · Loss 0 pt · Walkover 2 pts</div>';
+                if (selectedTourney === 'FZ_ICL_SS') iclHtml += window.ssFixturesHtml();
                 box.innerHTML = iclHtml;
             } else if (tab === 'points') {
                 var table = {};
@@ -4584,6 +4639,7 @@ window.shareLiveMatchLink = function() {
             window.navigateView = function() {
                 var r = origNav.apply(this, arguments);
                 window.refreshAdminVisibility();
+                if (viewId === 'viewScorer') window.applySpectatorView();
                 return r;
             };
         })();
@@ -5348,6 +5404,52 @@ window.shareLiveMatchLink = function() {
             return name + ' <span style="color:#94a3b8; font-size:0.72rem;">(' + (team || '') + ')</span>';
         };
 
+        // ---------- ICL Stage 2 ----------
+        window.stage2Fixtures = function(tourney) {
+            return scheduledFixturesList.filter(function(f) { return f.tournament === tourney && !f.removed; });
+        };
+
+        window.ssFixturesHtml = function() {
+            var rows = window.stage2Fixtures('FZ_ICL_SS').map(function(f) {
+                var st = window.fixtureStatus(f, archivedMatchesCache || []);
+                var res = st.status === 'played' ? ('✅ ' + st.result) : (st.status === 'aborted' ? '⛔ Aborted' : '⏳ Upcoming');
+                return '<tr><td>' + (f.date || '') + ' ' + (f.time || '') + '</td><td><b>' + f.team1 + '</b> v <b>' + f.team2 + '</b></td><td style="font-size:0.72rem;">' + res + '</td></tr>';
+            }).join('');
+            return '<div style="font-weight:900; color:#38bdf8; margin:12px 0 6px; font-size:0.85rem;">SUPER SIX FIXTURES</div>' +
+                '<table class="sc-table"><tr><th>Date / Time</th><th>Match</th><th>Status</th></tr>' + rows + '</table>';
+        };
+
+        window.renderPlateKnockout = function(box) {
+            var fx = window.stage2Fixtures('FZ_ICL_PLATE');
+            var archive = archivedMatchesCache || [];
+            var eliminated = {};
+            archive.forEach(function(m) {
+                if (m.tournament !== 'FZ_ICL_PLATE' || m.match_status !== 'completed' || !m.tA || !m.tB) return;
+                var w = String(m.winner || '');
+                var loser = (w.indexOf(m.tA.name) !== -1) ? m.tB.name : m.tA.name;
+                eliminated[loser] = true;
+            });
+            var alive = [];
+            fx.forEach(function(f) {
+                [f.team1, f.team2].forEach(function(n) {
+                    if (!n || /^Winner/i.test(n) || alive.indexOf(n) !== -1 || eliminated[n]) return;
+                    alive.push(n);
+                });
+            });
+            var rows = fx.map(function(f) {
+                var st = window.fixtureStatus(f, archive);
+                var res = st.status === 'played' ? ('✅ ' + st.result) : '⏳ Upcoming';
+                return '<tr><td>' + (f.matchNo || '') + '</td><td>' + (f.date || '') + ' ' + (f.time || '') + '</td><td><b>' + f.team1 + '</b> v <b>' + f.team2 + '</b></td><td style="font-size:0.72rem;">' + res + '</td></tr>';
+            }).join('');
+            var elim = Object.keys(eliminated);
+            box.innerHTML =
+                '<div style="font-weight:900; color:#38bdf8; margin:6px 0 4px;">🥈 PLATE CUP - KNOCKOUT</div>' +
+                '<div style="font-size:0.75rem; color:#94a3b8; margin-bottom:10px;">Any team that loses is out of the plate cup.</div>' +
+                '<table class="sc-table"><tr><th>Round</th><th>Date / Time</th><th>Match</th><th>Result</th></tr>' + rows + '</table>' +
+                '<div style="margin-top:12px; font-size:0.8rem;"><b style="color:#4ade80;">Still in the plate:</b> ' + (alive.length ? alive.join(', ') : '-') + '</div>' +
+                '<div style="margin-top:6px; font-size:0.8rem;"><b style="color:#f87171;">Eliminated:</b> ' + (elim.length ? elim.join(', ') : '-') + '</div>' +
+                '<div style="margin-top:6px; font-size:0.8rem;"><b style="color:#94a3b8;">Out of the tournament:</b> Stallions, Reservation Thunders, Old Monks</div>';
+        };
     </script>
 </body>
 </html>
