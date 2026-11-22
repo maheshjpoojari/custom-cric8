@@ -1640,8 +1640,9 @@
             updateSlotIndicators();
 
             if (unsubscribeSnapshot) unsubscribeSnapshot();
-            unsubscribeSnapshot = matchDocRef.onSnapshot({ includeMetadataChanges: false }, function(snap) {
+            unsubscribeSnapshot = matchDocRef.onSnapshot({ includeMetadataChanges: true }, function(snap) {
                 if (!snap.exists) return;
+                if (snap.metadata && snap.metadata.fromCache && navigator.onLine) return;
                 matchData = snap.data();
                 updateUI();
 
@@ -4701,6 +4702,7 @@ window.shareLiveMatchLink = function() {
         (function() {
             var origNav = window.navigateView;
             window.navigateView = function() {
+                if (arguments[0] === 'viewHome') closeAllOpenModals();
                 var r = origNav.apply(this, arguments);
                 window.refreshAdminVisibility();
                 if (arguments[0] === 'viewScorer') window.applySpectatorView();
@@ -5875,6 +5877,13 @@ window.shareLiveMatchLink = function() {
                 return fa - fb || keys.indexOf(a) - keys.indexOf(b);
             });
         };
+        // The browser can restore the page exactly as it was left; always come back to the console
+        window.addEventListener('pageshow', function(e) {
+            if (e.persisted) {
+                closeAllOpenModals();
+                if (!isSpectatorLockMode) window.navigateView('viewHome', true);
+            }
+        });
     </script>
 </body>
 </html>
