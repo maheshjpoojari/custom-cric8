@@ -2389,7 +2389,7 @@
             var d = matchData;
             window.applyMatchEndState(d);
 
-            if (d.match_status === "completed" && !document.getElementById('scorecardModal').classList.contains('viewed')) {
+            if (window.shouldAutoShowScorecard(d)) {
                 renderScorecardModal(d);
             }
 
@@ -5884,6 +5884,15 @@ window.shareLiveMatchLink = function() {
                 if (!isSpectatorLockMode) window.navigateView('viewHome', true);
             }
         });
+        // The full scorecard opens by itself only at the moment the match finishes during this visit.
+        // A refresh, back or forward on a finished match does not open it again.
+        window.shouldAutoShowScorecard = function(d) {
+            window.__matchStatusSeen = window.__matchStatusSeen || {};
+            var key = String(currentMatchId) + '|' + String(d.timestamp || '');
+            var prev = window.__matchStatusSeen[key];
+            window.__matchStatusSeen[key] = d.match_status;
+            return d.match_status === 'completed' && prev !== undefined && prev !== 'completed';
+        };
     </script>
 </body>
 </html>
