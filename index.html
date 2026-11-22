@@ -2536,10 +2536,10 @@
             var ppBtn = document.getElementById('ppToggleBtn');
             if (ppBtn) {
                 var isBeforeOverStart = (!d.curr_over || d.curr_over.length === 0);
-                var isWithinOvers1To7 = (completedOvers >= 1 && completedOvers <= 5) && (!d['pp_used_inn' + d.inn] || d.powerplay_active);
+                var isWithinOvers1To7 = (completedOvers >= 1 && completedOvers <= 6) && (!d['pp_used_inn' + d.inn] || d.powerplay_active);
                 var canTogglePP = isPairs && isBeforeOverStart && isWithinOvers1To7 && !isOverComplete;
 
-                var isMandatoryNow = isPairs && completedOvers === 0 && isBeforeOverStart;
+                var isMandatoryNow = isPairs && (completedOvers === 0 || (completedOvers === 6 && d.powerplay_active)) && isBeforeOverStart;
                 if (isMandatoryNow) {
                     ppBtn.disabled = true;
                     ppBtn.classList.add('btn-disabled');
@@ -3208,7 +3208,7 @@
                     var shortOutBat = (d[scKey] && d[scKey].batters) ? d[scKey].batters : {};
                     fullBatSquad.forEach(function(p) {
                         var out = shortOutBat[p] && shortOutBat[p].dismissals > 0;
-                        if (!freshBatters.includes(p) && !out && p !== d.crr_bat_name && p !== d.non_bat_name) {
+                        if (!freshBatters.includes(p) && !out) {
                             candidatePool.push({ name: p, label: p + " (Re-bat)" });
                         }
                     });
@@ -3248,7 +3248,7 @@
             if (window.isShortMatch(d)) {
                 freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
                 fullFieldSquad.forEach(function(p) {
-                    if (p !== d.crr_bowl && !freshBowlers.includes(p)) {
+                    if (!freshBowlers.includes(p)) {
                         bSel.add(new Option(p + " (Re-bowl)", p));
                     }
                 });
@@ -3929,10 +3929,13 @@
             var ipMap = d.impactPlayers || {};
             var isPairs = isPairsFormat(d);
 
+            var ppInn = (tabNum === 1) ? 1 : 2;
+            var ppOpt = (d.pp_log || []).filter(function(x) { return x.inn === ppInn; }).map(function(x) { return 'Over ' + x.over + (x.over === 7 ? ' (mandatory)' : ''); });
+            var ppLine = isPairs ? ('<div style="font-size:0.76rem; color:#fb923c; font-weight:800; margin-bottom:6px;">⚡ POWERPLAY: Over 1 (mandatory)' + (ppOpt.length ? ', ' + ppOpt.join(', ') : '') + '</div>') : '';
             var html = '<div style="font-size:0.84rem; color:var(--gold); font-weight:800; margin-bottom:6px;">' +
                 'Total: ' + (sc.totalScore || 0) + '/' + (sc.totalWkts || 0) +
                 ' (' + Math.floor((sc.totalBalls || 0) / 6) + '.' + ((sc.totalBalls || 0) % 6) + ' Ov) | Extras: ' + (sc.extras || 0) +
-                '</div>';
+                '</div>' + ppLine;
 
             html += '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>';
             for (var name in (sc.batters || {})) {
@@ -5432,8 +5435,19 @@ window.shareLiveMatchLink = function() {
 
         // A power play belongs to the over it was taken in; it ends when that over ends
         window.ppNormalize = function(d) {
-            if (!d || !d.powerplay_active || !d.tA || !d.tB) return;
+            if (!d || !d.tA || !d.tB) return;
             var over = window.ppCurrentOver(d);
+            var usedKey = 'pp_used_inn' + d.inn;
+            // Over 7 becomes mandatory when the second power play was not taken in overs 2 to 6
+            if (isPairsFormat(d) && over === 6 && !d[usedKey]) {
+                d.powerplay_active = true;
+                d.pp_over = 6;
+                d[usedKey] = true;
+                d.pp_log = (d.pp_log || []).filter(function(x) { return !(x.inn === d.inn && x.over === 7); });
+                d.pp_log.push({ inn: d.inn, over: 7 });
+                return;
+            }
+            if (!d.powerplay_active) return;
             if (typeof d.pp_over !== 'number') { d.pp_over = over; return; }
             if (d.pp_over !== over) d.powerplay_active = false;
         };
@@ -5449,17 +5463,21 @@ window.shareLiveMatchLink = function() {
 
             if (midOver) return alert("⚠️ Power Play can be set only before the first ball of an over.");
             if (over === 0) return alert("⚠️ Power Play is mandatory in Over 1 of each innings and cannot be changed.");
-            if (over >= totalOvers - 1) return alert("⚠️ Power Play is not allowed in Over " + totalOvers + " of any innings.");
-            if (over > 5) return alert("⚠️ The second Power Play can be taken only in Overs 2 to 6.");
+            if (over >= totalOvers) return alert("⚠️ Power Play is not allowed after Over " + totalOvers + " of any innings.");
+            if (over > 6) return alert("⚠️ The second Power Play can be taken only in Overs 2 to 7.");
+            if (over === 6 && d.powerplay_active) return alert("⚠️ Over 7 is a mandatory Power Play.");
 
             if (d.powerplay_active) {
                 d.powerplay_active = false;
                 d[usedKey] = false;
+                d.pp_log = (d.pp_log || []).filter(function(x) { return !(x.inn === d.inn && x.over === over + 1); });
             } else {
                 if (d[usedKey]) return alert("⚠️ The second Power Play is already used in this innings.");
                 d.powerplay_active = true;
                 d.pp_over = over;
                 d[usedKey] = true;
+                d.pp_log = (d.pp_log || []).filter(function(x) { return !(x.inn === d.inn && x.over === over + 1); });
+                d.pp_log.push({ inn: d.inn, over: over + 1 });
                 alert("Power Play 2 Fielders On Boundary");
             }
             syncMatchState(d);
@@ -5740,6 +5758,19 @@ window.shareLiveMatchLink = function() {
             var totalOvers = parseInt(d.totalOvers) || 8;
             var fb = sc.batters[fromName] || { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
             var tb = sc.batters[toName] || { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
+            sc.fow = Array.isArray(sc.fow) ? sc.fow : [];
+            var outsInPair = sc.fow.filter(function(f) {
+                return (f.player || '').indexOf(fromName) === 0 && Math.ceil(parseInt(String(f.over), 10) / 2) === pairNo;
+            }).length;
+            var movedOuts = Math.min(outsInPair, fb.dismissals || 0);
+            fb.dismissals = (fb.dismissals || 0) - movedOuts;
+            tb.dismissals = (tb.dismissals || 0) + movedOuts;
+            sc.fow = sc.fow.map(function(f) {
+                if ((f.player || '').indexOf(fromName) === 0 && Math.ceil(parseInt(String(f.over), 10) / 2) === pairNo) {
+                    return Object.assign({}, f, { player: toName + f.player.slice(fromName.length) });
+                }
+                return f;
+            });
             (d.ball_timeline || []).forEach(function(b) {
                 var o = parseInt(b.over, 10);
                 if (b.inn !== d.inn || Math.ceil(o / 2) !== pairNo || b.striker !== fromName) return;
@@ -5808,9 +5839,6 @@ window.shareLiveMatchLink = function() {
                     var side = window.currentBattingSide(matchData);
                     var squad = getActivePlayingSquad(side.batName, matchData, side.isA);
                     var sc = matchData[matchData.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard'] || {};
-                    if (sc.batters && sc.batters[from] && sc.batters[from].dismissals > 0) {
-                        return alert(from + ' is out, so this batter cannot be changed.');
-                    }
                     var atCrease = [matchData.crr_bat_name, matchData.non_bat_name];
                     var options = squad.filter(function(x) { return atCrease.indexOf(x) === -1; });
                     window.openPlayerPicker('Who actually batted in Pair ' + p + '?', options, from, function(nv) {
