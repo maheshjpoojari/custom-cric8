@@ -1248,7 +1248,7 @@
     <div id="impactModal" class="modal hidden">
         <div class="modal-card" style="border-color:var(--purple);">
             <h3 style="margin-top:0; color:var(--purple); text-align:center;">⚡ IMPACT PLAYER SUBSTITUTION</h3>
-            <p style="font-size:0.76rem; color:#94a3b8; text-align:center; margin-top:-6px;">Available after Over 7 finishes until Ball 1 of Over 8 is bowled</p>
+            <p style="font-size:0.76rem; color:#94a3b8; text-align:center; margin-top:-6px;">Available after Innings 1 ends, before Innings 2 starts</p>
 
             <div class="input-group">
                 <label>Select Team Declaring Impact Decision</label>
@@ -3203,6 +3203,16 @@
                     });
                 }
 
+                if (window.isShortMatch(d)) {
+                    candidatePool = freshBatters.map(function(p) { return { name: p, label: p }; });
+                    var shortOutBat = (d[scKey] && d[scKey].batters) ? d[scKey].batters : {};
+                    fullBatSquad.forEach(function(p) {
+                        var out = shortOutBat[p] && shortOutBat[p].dismissals > 0;
+                        if (!freshBatters.includes(p) && !out && p !== d.crr_bat_name && p !== d.non_bat_name) {
+                            candidatePool.push({ name: p, label: p + " (Re-bat)" });
+                        }
+                    });
+                }
                 if (candidatePool.length < 2 && !isFullBatSquad) {
                     candidatePool = [
                         { name: batTeamName + " Pair " + nextPairNum + "A", label: batTeamName + " Pair " + nextPairNum + "A" },
@@ -3235,7 +3245,14 @@
             var bSel = document.getElementById('nextBowlerSelect');
             bSel.innerHTML = '';
 
-            if (isPairs && freshBowlers.length > 0 && fullFieldSquad.length >= totalOvers) {
+            if (window.isShortMatch(d)) {
+                freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
+                fullFieldSquad.forEach(function(p) {
+                    if (p !== d.crr_bowl && !freshBowlers.includes(p)) {
+                        bSel.add(new Option(p + " (Re-bowl)", p));
+                    }
+                });
+            } else if (isPairs && freshBowlers.length > 0 && fullFieldSquad.length >= totalOvers) {
                 freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
             } else {
                 freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
