@@ -1549,17 +1549,21 @@
         };
 
         window.addEventListener('popstate', function(event) {
-            if (closeAllOpenModals()) return;
+            closeAllOpenModals();
             if (isSpectatorLockMode) {
                 window.openLiveHubView();
                 return;
             }
-            if (event.state && event.state.view && event.state.view !== 'viewScorer' && event.state.view !== 'viewToss') {
-                window.navigateView(event.state.view, true);
-            } else {
-                window.navigateView('viewHome', true);
-            }
+            var target = (event.state && event.state.view) ? event.state.view : 'viewHome';
+            if (target === 'viewScorer' || target === 'viewToss' || target === 'viewAdmin') target = 'viewHome';
+            window.navigateView(target, true);
         });
+
+        // A refresh always starts on the console, and the history never points at a live screen
+        (function() {
+            try { window.history.replaceState({ view: 'viewHome' }, '', window.location.pathname + window.location.search); } catch (e) {}
+            closeAllOpenModals();
+        })();
 
         function isPairsFormat(d) {
             return d && (d.rulesFormat === 'pairs' || d.rulesFormat === 'pairs_practice');
@@ -3938,7 +3942,10 @@
                 '</div>' + ppLine;
 
             html += '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr>';
-            for (var name in (sc.batters || {})) {
+            var __inn = (sc === d.inn1_scorecard) ? 1 : 2;
+            var __batNames = window.matchOrderNames(d, __inn, 'striker', sc.batters || {});
+            for (var __bi = 0; __bi < __batNames.length; __bi++) {
+                var name = __batNames[__bi];
                 var st = sc.batters[name];
                 var sr = st.balls > 0 ? ((st.runs / st.balls) * 100).toFixed(1) : "0.0";
                 var isRebat = rebatList.includes(name);
@@ -3950,7 +3957,9 @@
             html += '</table>';
 
             html += '<table class="sc-table" style="margin-top:12px;"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th></tr>';
-            for (var bName in (sc.bowlers || {})) {
+            var __bowlNames = window.matchOrderNames(d, __inn, 'bowler', sc.bowlers || {});
+            for (var __bj = 0; __bj < __bowlNames.length; __bj++) {
+                var bName = __bowlNames[__bj];
                 var bst = sc.bowlers[bName];
                 var ov = Math.floor(bst.balls / 6) + "." + (bst.balls % 6);
                 var ec = bst.balls > 0 ? ((bst.runs / bst.balls) * 6).toFixed(1) : "0.0";
@@ -5848,6 +5857,22 @@ window.shareLiveMatchLink = function() {
                         alert('Pair ' + p + ' now shows ' + nv + ' as the batter.');
                     });
                 });
+            });
+        };
+        // Names in the order they first appear in the innings (batters by pair, bowlers by over).
+        // A player who comes back later keeps his first position; his figures stay in that one row.
+        window.matchOrderNames = function(d, inn, field, obj) {
+            var first = {};
+            (d.ball_timeline || []).forEach(function(b, i) {
+                if (b.inn !== inn) return;
+                var n = b[field];
+                if (n && first[n] === undefined) first[n] = i;
+            });
+            var keys = Object.keys(obj || {});
+            return keys.slice().sort(function(a, b) {
+                var fa = first[a] === undefined ? 1e9 : first[a];
+                var fb = first[b] === undefined ? 1e9 : first[b];
+                return fa - fb || keys.indexOf(a) - keys.indexOf(b);
             });
         };
     </script>
