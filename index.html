@@ -3090,8 +3090,8 @@
                 return !usedBatters.includes(p) && p !== d.crr_bat_name && p !== d.non_bat_name;
             });
 
-            var isFullNbSquad = fullSquad.length >= (parseInt(d.playersPerTeam) || 8) && !window.isShortMatch(d);
-            if (availableNext.length === 0) {
+            var isFullNbSquad = fullSquad.length >= (parseInt(d.playersPerTeam) || 8);
+            if (availableNext.length === 0 && !isFullNbSquad) {
                 var nbScKey = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
                 var nbBatters = (d[nbScKey] && d[nbScKey].batters) ? d[nbScKey].batters : {};
                 availableNext = fullSquad.filter(function(p) {
@@ -3191,7 +3191,9 @@
                     return !usedBatters.includes(p) && p !== d.crr_bat_name && p !== d.non_bat_name;
                 });
 
-                var isFullBatSquad = fullBatSquad.length >= (parseInt(d.playersPerTeam) || 8) && !window.isShortMatch(d);
+                var reqPlayers = parseInt(d.playersPerTeam) || 8;
+                var isFullBatSquad = fullBatSquad.length >= reqPlayers;
+                var batShort = fullBatSquad.length > 0 && fullBatSquad.length < reqPlayers;
                 var candidatePool = [];
                 if (freshBatters.length >= 2) {
                     candidatePool = freshBatters.map(function(p) { return { name: p, label: p }; });
@@ -3200,7 +3202,7 @@
                         candidatePool.push({ name: p, label: p });
                     });
                     var pairScBatters = (d[scKey] && d[scKey].batters) ? d[scKey].batters : {};
-                    fullBatSquad.forEach(function(p) {
+                    if (batShort) fullBatSquad.forEach(function(p) {
                         var isOutAlready = pairScBatters[p] && pairScBatters[p].dismissals > 0;
                         if (!freshBatters.includes(p) && !rebatList.includes(p) && !isOutAlready && p !== d.crr_bat_name && p !== d.non_bat_name) {
                             candidatePool.push({ name: p, label: p + " (Re-bat)" });
@@ -3208,7 +3210,7 @@
                     });
                 }
 
-                if (window.isShortMatch(d)) {
+                if (batShort) {
                     candidatePool = freshBatters.map(function(p) { return { name: p, label: p }; });
                     var shortOutBat = (d[scKey] && d[scKey].batters) ? d[scKey].batters : {};
                     fullBatSquad.forEach(function(p) {
@@ -3242,7 +3244,7 @@
             var scKeyBowl = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
             var doubleOverList = (d[scKeyBowl] && Array.isArray(d[scKeyBowl].double_over_bowlers)) ? d[scKeyBowl].double_over_bowlers : [];
 
-            var isFullFieldSquad = fullFieldSquad.length >= (parseInt(d.playersPerTeam) || 8) && !window.isShortMatch(d);
+            var fieldShort = fullFieldSquad.length > 0 && fullFieldSquad.length < (parseInt(d.playersPerTeam) || 8);
             var freshBowlers = fullFieldSquad.filter(function(p) {
                 return !usedBowlers.includes(p) && p !== d.crr_bowl;
             });
@@ -3250,26 +3252,13 @@
             var bSel = document.getElementById('nextBowlerSelect');
             bSel.innerHTML = '';
 
-            if (window.isShortMatch(d)) {
-                freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
+            freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
+            if (fieldShort) {
                 fullFieldSquad.forEach(function(p) {
-                    if (!freshBowlers.includes(p)) {
-                        bSel.add(new Option(p + " (Re-bowl)", p));
-                    }
-                });
-            } else if (isPairs && freshBowlers.length > 0 && fullFieldSquad.length >= totalOvers) {
-                freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
-            } else {
-                freshBowlers.forEach(function(p) { bSel.add(new Option(p, p)); });
-                fullFieldSquad.forEach(function(p) {
-                    if (freshBowlers.length === 0 && p !== d.crr_bowl && !freshBowlers.includes(p) && (!isPairs || !doubleOverList.includes(p))) {
-                        var lbl = usedBowlers.includes(p) ? (p + " (2nd Over)") : p;
-                        bSel.add(new Option(lbl, p));
-                    }
+                    if (!freshBowlers.includes(p) && p !== d.crr_bowl) bSel.add(new Option(p + " (Re-bowl)", p));
                 });
             }
-
-            if (bSel.options.length === 0) {
+            if (fieldShort && bSel.options.length === 0) {
                 fullFieldSquad.forEach(function(p) { if (p !== d.crr_bowl) bSel.add(new Option(p, p)); });
             }
             bSel.add(new Option("➕ Add New Player...", "__ADD_PLAYER__"));
@@ -3770,7 +3759,7 @@
             var opts = sq.filter(function(p) { return p !== d0.non_bat_name && !(outs[p] && outs[p].dismissals > 0); });
             window.openPlayerPicker("Select Striker", opts, d0.crr_bat_name, function(name) {
                 var d = JSON.parse(JSON.stringify(matchData));
-                window.applyPlayerEdit(d, 'striker', d.crr_bat_name, name);
+                if (!window.applyPlayerEdit(d, 'striker', d.crr_bat_name, name)) return;
                 syncMatchState(d);
             });
         };
@@ -3785,7 +3774,7 @@
             var opts = sq.filter(function(p) { return p !== d0.crr_bat_name && !(outs[p] && outs[p].dismissals > 0); });
             window.openPlayerPicker("Select Non-Striker", opts, d0.non_bat_name, function(name) {
                 var d = JSON.parse(JSON.stringify(matchData));
-                window.applyPlayerEdit(d, 'nonstriker', d.non_bat_name, name);
+                if (!window.applyPlayerEdit(d, 'nonstriker', d.non_bat_name, name)) return;
                 syncMatchState(d);
             });
         };
@@ -3795,9 +3784,11 @@
             var d0 = matchData;
             var info = window.getBattingSideInfo(d0);
             var sq = getActivePlayingSquad(info.bowlTeam, d0, !info.isA);
+            var bw0 = (d0[d0.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'] || {}).bowlers || {};
+            sq = sq.filter(function(p) { return p === d0.crr_bowl || !((bw0[p] || {}).balls >= 6); });
             window.openPlayerPicker("Select Bowler", sq, d0.crr_bowl, function(name) {
                 var d = JSON.parse(JSON.stringify(matchData));
-                window.applyPlayerEdit(d, 'bowl', d.crr_bowl, name);
+                if (!window.applyPlayerEdit(d, 'bowl', d.crr_bowl, name)) return;
                 syncMatchState(d);
             });
         };
@@ -5230,6 +5221,8 @@ window.shareLiveMatchLink = function() {
 
         // Deducts a penalty (positive amount) from the batter's runs and from the team total
         window.applyPenaltyAmount = function(d, batter, pen) {
+            var tl = d.ball_timeline || [];
+            if (tl.length) { var lastBall = tl[tl.length - 1]; lastBall.pen = (lastBall.pen || 0) + pen; if (lastBall.dl) { window.ensureFig(lastBall.dl.bat, batter, window.zeroBat).runs -= pen; } }
             var bk = window.battingKey(d);
             var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
             d[bk].score = (parseInt(d[bk].score) || 0) - pen;
@@ -5289,7 +5282,7 @@ window.shareLiveMatchLink = function() {
             }
         };
 
-        // Remember the last recorded ball and every ball of the current over (for NEG and EDIT BALL)
+        // Remember the last recorded ball, its exact figure changes (ball.dl) and every ball of the current over
         (function() {
             var wrap = function(name, editableCall) {
                 var orig = window[name];
@@ -5299,8 +5292,18 @@ window.shareLiveMatchLink = function() {
                     var before = window.deliverySig(matchData);
                     var batter0 = matchData.crr_bat_name;
                     var bowler0 = matchData.crr_bowl;
+                    var len0 = (matchData.ball_timeline || []).length;
+                    var fig0 = window.snapFigures(matchData);
                     var r = orig.apply(this, arguments);
                     if (!matchData || window.deliverySig(matchData) === before) return r;
+                    var inn = matchData.inn;
+                    var tlLive = matchData.ball_timeline || [];
+                    if (tlLive.length > len0) {
+                        tlLive[tlLive.length - 1].dl = window.diffFigures(fig0, window.snapFigures(matchData));
+                    } else {
+                        // figures moved without a log entry: this innings can no longer be corrected
+                        matchData['dl_gap_' + inn] = true;
+                    }
                     var d = JSON.parse(JSON.stringify(matchData));
                     d.last_ball = { batter: batter0, count: window.battingBalls(d), penalized: false };
                     d.pending_penalty = 0;
@@ -5310,7 +5313,7 @@ window.shareLiveMatchLink = function() {
                     }
                     if (over.length > 0) {
                         var isRun = editableCall && /^[0-6]$/.test(String(val));
-                        d.over_balls.push({ batter: batter0, bowler: bowler0, runs: isRun ? parseInt(val, 10) : null, editable: !!isRun });
+                        d.over_balls.push({ batter: batter0, bowler: bowler0, runs: isRun ? parseInt(val, 10) : null, editable: !!isRun, tl: (d.ball_timeline || []).length - 1 });
                     }
                     if (d.match_status === 'completed') window.recomputeMatchResult(d);
                     syncMatchState(d);
@@ -5363,6 +5366,16 @@ window.shareLiveMatchLink = function() {
             if (d.crr_bat_name === b.batter) d.crr_bat_runs = (parseInt(d.crr_bat_runs) || 0) + diff;
             else if (d.non_bat_name === b.batter) d.non_bat_runs = (parseInt(d.non_bat_runs) || 0) + diff;
             d.curr_over[idx] = String(newRuns);
+            var oldRunsB = parseInt(b.runs, 10) || 0;
+            var tlBall = (typeof b.tl === 'number') ? (d.ball_timeline || [])[b.tl] : null;
+            if (tlBall && tlBall.dl) {
+                var fb = window.ensureFig(tlBall.dl.bat, tlBall.striker, window.zeroBat);
+                fb.runs += diff;
+                fb.fours += (newRuns === 4 ? 1 : 0) - (oldRunsB === 4 ? 1 : 0);
+                fb.sixes += (newRuns === 6 ? 1 : 0) - (oldRunsB === 6 ? 1 : 0);
+                window.ensureFig(tlBall.dl.bowl, tlBall.bowler, window.zeroBowl).runs += diff;
+                tlBall.event = String(newRuns);
+            }
             b.runs = newRuns;
             if (d.match_status === 'completed') window.recomputeMatchResult(d);
             syncMatchState(d);
@@ -5633,169 +5646,204 @@ window.shareLiveMatchLink = function() {
             window.updateLineupDropdowns();
         };
 
-        // ---------- Edits from the scorer screen ----------
-        // Moves the player's figures to the corrected name, and keeps the used lists right,
-        // so the correct names appear in the next over and pair selection.
+        // ---------- Corrections: one mechanism for every batter / bowler change ----------
+        // Each recorded ball keeps its exact figure changes in ball.dl (batter runs/balls/fours/sixes/dismissals,
+        // bowler balls/runs/wickets). A correction moves those figures for the affected balls to the right player,
+        // then the innings scorecard is rebuilt from the ball log. The replaced player's figures drop to zero.
+        window.zeroBat = function() { return { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 }; };
+        window.zeroBowl = function() { return { balls: 0, runs: 0, wkts: 0 }; };
+        window.ensureFig = function(map, name, mk) { if (!map[name]) map[name] = mk(); return map[name]; };
+
+        window.snapFigures = function(d) {
+            var sc = d[d.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'] || {};
+            var bat = {}, bowl = {};
+            Object.keys(sc.batters || {}).forEach(function(n) {
+                var b = sc.batters[n] || {};
+                bat[n] = { runs: parseInt(b.runs) || 0, balls: parseInt(b.balls) || 0, fours: parseInt(b.fours) || 0, sixes: parseInt(b.sixes) || 0, dismissals: parseInt(b.dismissals) || 0 };
+            });
+            Object.keys(sc.bowlers || {}).forEach(function(n) {
+                var b = sc.bowlers[n] || {};
+                bowl[n] = { balls: parseInt(b.balls) || 0, runs: parseInt(b.runs) || 0, wkts: parseInt(b.wkts) || 0 };
+            });
+            return { bat: bat, bowl: bowl };
+        };
+
+        // Exact change in each player's figures caused by one delivery
+        window.diffFigures = function(before, after) {
+            var dl = { bat: {}, bowl: {} };
+            var BK = ['runs', 'balls', 'fours', 'sixes', 'dismissals'];
+            var WK = ['balls', 'runs', 'wkts'];
+            var zb = window.zeroBat(), zw = window.zeroBowl();
+            Object.keys(after.bat).forEach(function(n) {
+                var a = after.bat[n], b = before.bat[n] || zb, x = {}, any = false;
+                BK.forEach(function(k) { x[k] = a[k] - b[k]; if (x[k]) any = true; });
+                if (any) dl.bat[n] = x;
+            });
+            Object.keys(after.bowl).forEach(function(n) {
+                var a = after.bowl[n], b = before.bowl[n] || zw, x = {}, any = false;
+                WK.forEach(function(k) { x[k] = a[k] - b[k]; if (x[k]) any = true; });
+                if (any) dl.bowl[n] = x;
+            });
+            return dl;
+        };
+
+        // The over being bowled (or the last over, while its balls are still shown)
+        window.currentOverNo = function(d) {
+            var mine = (d.ball_timeline || []).filter(function(b) { return b.inn === d.inn; });
+            if ((d.curr_over || []).length > 0 && mine.length) return parseInt(mine[mine.length - 1].over, 10) || 1;
+            return Math.floor(window.battingBalls(d) / 6) + 1;
+        };
+
+        // An innings recorded before this update has no per-ball figures, so it cannot be corrected safely
+        window.isLegacyInnings = function(d, inn) {
+            if (d['dl_gap_' + inn]) return true;
+            var tl = (d.ball_timeline || []).filter(function(b) { return b.inn === inn; });
+            if (tl.some(function(b) { return !b.dl; })) return true;
+            var sc = d[inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'] || {};
+            var hasFig = Object.keys(sc.batters || {}).some(function(n) { return (parseInt(sc.batters[n].balls) || 0) > 0; });
+            return hasFig && tl.length === 0;
+        };
+
+        // Rebuilds one innings' batter and bowler figures from the ball log. Team totals are not changed.
+        window.rebuildInnings = function(d, inn) {
+            var sk = inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard';
+            var old = d[sk] || {};
+            var bat = {}, bowl = {}, pairsOf = {}, oversOf = {};
+            (d.ball_timeline || []).forEach(function(b) {
+                if (b.inn !== inn) return;
+                if (b.dl) {
+                    Object.keys(b.dl.bat || {}).forEach(function(n) {
+                        var x = b.dl.bat[n], r = window.ensureFig(bat, n, window.zeroBat);
+                        ['runs', 'balls', 'fours', 'sixes', 'dismissals'].forEach(function(k) { r[k] += x[k] || 0; });
+                    });
+                    Object.keys(b.dl.bowl || {}).forEach(function(n) {
+                        var x = b.dl.bowl[n], r = window.ensureFig(bowl, n, window.zeroBowl);
+                        ['balls', 'runs', 'wkts'].forEach(function(k) { r[k] += x[k] || 0; });
+                    });
+                }
+                var ov = parseInt(b.over, 10) || 1;
+                if (b.striker) { pairsOf[b.striker] = pairsOf[b.striker] || {}; pairsOf[b.striker][Math.ceil(ov / 2)] = true; }
+                if (b.bowler) { oversOf[b.bowler] = oversOf[b.bowler] || {}; oversOf[b.bowler][ov] = true; }
+            });
+            var oldW = old.bowlers || {};
+            Object.keys(bowl).forEach(function(n) { bowl[n].maidens = (oldW[n] && oldW[n].maidens) || 0; });
+            var atCrease = [d.crr_bat_name, d.non_bat_name];
+            Object.keys(bat).forEach(function(n) {
+                var r = bat[n];
+                if (!r.runs && !r.balls && !r.dismissals && !r.fours && !r.sixes && atCrease.indexOf(n) === -1) delete bat[n];
+            });
+            Object.keys(bowl).forEach(function(n) {
+                var r = bowl[n];
+                if (!r.balls && !r.runs && !r.wkts && !r.maidens && n !== d.crr_bowl) delete bowl[n];
+            });
+            d[sk] = Object.assign({}, old, {
+                batters: bat,
+                bowlers: bowl,
+                rebat_players: Object.keys(pairsOf).filter(function(n) { return Object.keys(pairsOf[n]).length > 1; }),
+                double_over_bowlers: Object.keys(oversOf).filter(function(n) { return Object.keys(oversOf[n]).length > 1; })
+            });
+        };
+
+        // The crease figures always come from the scorecard
+        window.refreshCrease = function(d) {
+            var bats = (d[d.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'] || {}).batters || {};
+            var s = bats[d.crr_bat_name] || window.zeroBat();
+            d.crr_bat_runs = s.runs; d.crr_bat_balls = s.balls;
+            var n = bats[d.non_bat_name] || window.zeroBat();
+            d.non_bat_runs = n.runs; d.non_bat_balls = n.balls;
+        };
+
+        // Used lists always match the scorecard: a batter who has faced a ball (or is out) is used,
+        // a bowler who has bowled is used, and the players on the crease / the current bowler are used.
+        window.recomputeUsedLists = function(d) {
+            var sc = d[d.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'] || {};
+            var bats = sc.batters || {};
+            var bowls = sc.bowlers || {};
+            var usedB = Object.keys(bats).filter(function(p) { return (bats[p].balls || 0) > 0 || (bats[p].dismissals || 0) > 0; });
+            [d.crr_bat_name, d.non_bat_name].forEach(function(p) { if (p && usedB.indexOf(p) === -1) usedB.push(p); });
+            var usedW = Object.keys(bowls).filter(function(p) { return (bowls[p].balls || 0) > 0; });
+            if (d.crr_bowl && usedW.indexOf(d.crr_bowl) === -1) usedW.push(d.crr_bowl);
+            d.used_batsmen = usedB;
+            d.used_bowlers = usedW;
+        };
+
+        // Moves the figures of the balls matching pred from one player to another. Returns false if refused.
+        window.correctPlayer = function(d, role, fromName, toName, pred) {
+            if (!fromName || !toName || fromName === toName) return true;
+            if (window.isLegacyInnings(d, d.inn)) {
+                alert("This innings was recorded before this update, so its figures cannot be corrected safely. Please ask the admin.");
+                return false;
+            }
+            var key = role === 'bat' ? 'bat' : 'bowl';
+            var mk = role === 'bat' ? window.zeroBat : window.zeroBowl;
+            var balls = {};
+            (d.ball_timeline || []).forEach(function(b) {
+                if (b.inn !== d.inn || !pred(b)) return;
+                if (b.dl && b.dl[key] && b.dl[key][fromName]) {
+                    var src = b.dl[key][fromName];
+                    var dst = window.ensureFig(b.dl[key], toName, mk);
+                    Object.keys(src).forEach(function(k) { dst[k] = (dst[k] || 0) + (src[k] || 0); });
+                    delete b.dl[key][fromName];
+                }
+                if (role === 'bat') {
+                    if (b.striker === fromName) b.striker = toName;
+                    if (b.batter === fromName) b.batter = toName;
+                    balls[String(b.ball)] = true;
+                } else if (b.bowler === fromName) {
+                    b.bowler = toName;
+                }
+            });
+            if (role === 'bat') {
+                var sc = d[d.inn === 2 ? 'inn2_scorecard' : 'inn1_scorecard'];
+                if (sc && Array.isArray(sc.fow)) {
+                    sc.fow = sc.fow.map(function(f) {
+                        if ((f.player || '').indexOf(fromName) === 0 && balls[String(f.over)]) {
+                            return Object.assign({}, f, { player: toName + f.player.slice(fromName.length) });
+                        }
+                        return f;
+                    });
+                }
+            }
+            window.rebuildInnings(d, d.inn);
+            window.refreshCrease(d);
+            window.recomputeUsedLists(d);
+            return true;
+        };
+
+        // Corrections from the scorer screen (current over / current pair). Returns false if refused.
         window.applyPlayerEdit = function(d, role, oldName, newName) {
             if (!oldName || oldName === newName) {
                 if (role === 'bowl') d.crr_bowl = newName;
                 else if (role === 'striker') d.crr_bat_name = newName;
                 else d.non_bat_name = newName;
-                return;
+                return true;
             }
-            var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
-            var sc = d[sk] || {};
-            sc.batters = sc.batters || {};
-            sc.bowlers = sc.bowlers || {};
-            if (!Array.isArray(d.used_bowlers)) d.used_bowlers = [];
-            if (!Array.isArray(d.used_batsmen)) d.used_batsmen = [];
-            var dropFrom = function(list, name) { return list.filter(function(p) { return p !== name; }); };
-
             if (role === 'bowl') {
-                var overLegal = (d.curr_over || []).filter(function(t) {
-                    var s = String(t);
-                    return !/^Wd/.test(s) && !/^N/.test(s) && s.indexOf('OT:') !== 0;
-                }).length;
-                var ob = sc.bowlers[oldName];
-                var movable = ob && (ob.balls || 0) === overLegal;
-                if (movable) {
-                    var nb = sc.bowlers[newName] || { balls: 0, runs: 0, maidens: 0, wkts: 0 };
-                    nb.balls += ob.balls || 0;
-                    nb.runs += ob.runs || 0;
-                    nb.wkts += ob.wkts || 0;
-                    nb.maidens = (nb.maidens || 0) + (ob.maidens || 0);
-                    sc.bowlers[newName] = nb;
-                    delete sc.bowlers[oldName];
-                    (d.over_balls || []).forEach(function(b) { if (b.bowler === oldName) b.bowler = newName; });
-                }
-                if (!ob || movable || !ob.balls) d.used_bowlers = dropFrom(d.used_bowlers, oldName);
-                if (d.used_bowlers.indexOf(newName) === -1) d.used_bowlers.push(newName);
-                d[sk] = sc;
+                var ov = window.currentOverNo(d);
+                if (!window.correctPlayer(d, 'bowl', oldName, newName, function(b) { return (parseInt(b.over, 10) || 1) === ov && b.bowler === oldName; })) return false;
                 d.crr_bowl = newName;
-                return;
+                window.recomputeUsedLists(d);
+                return true;
             }
-
-            var ab = sc.batters[oldName];
-            var canMove = ab && !(ab.dismissals > 0);
-            if (canMove) {
-                var nbt = sc.batters[newName] || { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
-                nbt.runs += ab.runs || 0;
-                nbt.balls += ab.balls || 0;
-                nbt.fours += ab.fours || 0;
-                nbt.sixes += ab.sixes || 0;
-                sc.batters[newName] = nbt;
-                delete sc.batters[oldName];
-                (d.over_balls || []).forEach(function(b) { if (b.batter === oldName) b.batter = newName; });
-                if (d.last_ball && d.last_ball.batter === oldName) d.last_ball.batter = newName;
-            }
-            if (!ab || canMove || !ab.balls) d.used_batsmen = dropFrom(d.used_batsmen, oldName);
-            if (d.used_batsmen.indexOf(newName) === -1) d.used_batsmen.push(newName);
-            d[sk] = sc;
+            var pr = Math.ceil(window.currentOverNo(d) / 2);
+            if (!window.correctPlayer(d, 'bat', oldName, newName, function(b) { return Math.ceil((parseInt(b.over, 10) || 1) / 2) === pr && b.striker === oldName; })) return false;
             if (role === 'striker') d.crr_bat_name = newName;
             else d.non_bat_name = newName;
+            window.refreshCrease(d);
+            window.recomputeUsedLists(d);
+            return true;
         };
 
-        // ---------- Short squad applies to the whole match ----------
-        window.isShortMatch = function(d) {
-            var req = parseInt(d.playersPerTeam) || 8;
-            var a = (d.team1_squad || []).length, b = (d.team2_squad || []).length;
-            return (a > 0 && a < req) || (b > 0 && b < req);
-        };
-
-        // ---------- Ball facts from the ball log (used to move figures to the right player) ----------
-        window.ballFacts = function(ev, overNo, totalOvers) {
-            var f = { legal: 0, bowlRuns: 0, wkt: 0, batRuns: 0, batBalls: 0, fours: 0, sixes: 0 };
-            var s = String(ev);
-            var pairsBall = overNo < totalOvers; // extras count as a ball in non-final overs
-            if (/^\d+$/.test(s)) {
-                var n = parseInt(s, 10);
-                f.legal = 1; f.bowlRuns = n; f.batRuns = n; f.batBalls = 1;
-                if (n === 4) f.fours = 1;
-                if (n === 6) f.sixes = 1;
-            } else if (s === 'W') {
-                f.legal = 1; f.wkt = 1; f.batBalls = 1;
-            } else if (s === '3D(-5)') {
-                f.legal = 1; f.batRuns = -5; f.batBalls = 1;
-            } else if (/^1D(\+(\d+))?$/.test(s)) {
-                var dn = parseInt((s.match(/\+(\d+)/) || [0, 0])[1], 10);
-                f.legal = 1; f.bowlRuns = 1 + dn; f.batRuns = 1 + dn; f.batBalls = 1;
-            } else if (/^\d+B$/.test(s)) {
-                f.legal = 1; f.batBalls = 1;
-            } else if (/^Wd(\+(\d+))?$/.test(s)) {
-                var wn = parseInt((s.match(/\+(\d+)/) || [0, 0])[1], 10);
-                f.legal = pairsBall ? 1 : 0; f.bowlRuns = 2 + wn;
-            } else if (/^N(\+(\d+))?$/.test(s)) {
-                var nn = parseInt((s.match(/\+(\d+)/) || [0, 0])[1], 10);
-                f.legal = pairsBall ? 1 : 0; f.bowlRuns = 2 + nn; f.batRuns = nn; f.batBalls = 1;
-            }
-            return f;
-        };
-
-        // Moves one over's figures from one bowler to another (the ball log is the source)
+        // PAST OVER: the bowler of one completed over
         window.retagPastOverBowler = function(d, overNo, fromName, toName) {
-            var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
-            var sc = d[sk] || {};
-            sc.bowlers = sc.bowlers || {};
-            var totalOvers = parseInt(d.totalOvers) || 8;
-            var fs = sc.bowlers[fromName] || { balls: 0, runs: 0, wkts: 0, maidens: 0 };
-            var ts = sc.bowlers[toName] || { balls: 0, runs: 0, wkts: 0, maidens: 0 };
-            var runOuts = (sc.fow || []).filter(function(x) {
-                return parseInt(String(x.over), 10) === overNo && /run out/i.test(x.player || '');
-            }).length;
-            var wktsMoved = 0;
-            (d.ball_timeline || []).forEach(function(b) {
-                if (b.inn !== d.inn || parseInt(b.over, 10) !== overNo || b.bowler !== fromName) return;
-                var f = window.ballFacts(b.event, overNo, totalOvers);
-                fs.balls -= f.legal; fs.runs -= f.bowlRuns; fs.wkts -= f.wkt;
-                ts.balls += f.legal; ts.runs += f.bowlRuns; ts.wkts += f.wkt;
-                wktsMoved += f.wkt;
-                b.bowler = toName;
-            });
-            // a run-out is not a bowler's wicket
-            ts.wkts -= Math.min(runOuts, wktsMoved);
-            sc.bowlers[fromName] = fs;
-            sc.bowlers[toName] = ts;
-            d[sk] = sc;
-            d.used_bowlers = Array.isArray(d.used_bowlers) ? d.used_bowlers : [];
-            if (fs.balls <= 0) d.used_bowlers = d.used_bowlers.filter(function(x) { return x !== fromName; });
-            if (d.used_bowlers.indexOf(toName) === -1) d.used_bowlers.push(toName);
+            return window.correctPlayer(d, 'bowl', fromName, toName, function(b) { return (parseInt(b.over, 10) || 1) === overNo && b.bowler === fromName; });
         };
 
-        // Moves one pair's batting figures from one batter to another (the ball log is the source)
+        // PAST PAIR: the batter of one completed pair
         window.retagPastPairBatter = function(d, pairNo, fromName, toName) {
-            var sk = d.inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard';
-            var sc = d[sk] || {};
-            sc.batters = sc.batters || {};
-            var totalOvers = parseInt(d.totalOvers) || 8;
-            var fb = sc.batters[fromName] || { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
-            var tb = sc.batters[toName] || { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
-            sc.fow = Array.isArray(sc.fow) ? sc.fow : [];
-            var outsInPair = sc.fow.filter(function(f) {
-                return (f.player || '').indexOf(fromName) === 0 && Math.ceil(parseInt(String(f.over), 10) / 2) === pairNo;
-            }).length;
-            var movedOuts = Math.min(outsInPair, fb.dismissals || 0);
-            fb.dismissals = (fb.dismissals || 0) - movedOuts;
-            tb.dismissals = (tb.dismissals || 0) + movedOuts;
-            sc.fow = sc.fow.map(function(f) {
-                if ((f.player || '').indexOf(fromName) === 0 && Math.ceil(parseInt(String(f.over), 10) / 2) === pairNo) {
-                    return Object.assign({}, f, { player: toName + f.player.slice(fromName.length) });
-                }
-                return f;
-            });
-            (d.ball_timeline || []).forEach(function(b) {
-                var o = parseInt(b.over, 10);
-                if (b.inn !== d.inn || Math.ceil(o / 2) !== pairNo || b.striker !== fromName) return;
-                var f = window.ballFacts(b.event, o, totalOvers);
-                fb.runs -= f.batRuns; fb.balls -= f.batBalls; fb.fours -= f.fours; fb.sixes -= f.sixes;
-                tb.runs += f.batRuns; tb.balls += f.batBalls; tb.fours += f.fours; tb.sixes += f.sixes;
-                b.striker = toName; b.batter = toName;
-            });
-            sc.batters[fromName] = fb;
-            sc.batters[toName] = tb;
-            d[sk] = sc;
-            d.used_batsmen = Array.isArray(d.used_batsmen) ? d.used_batsmen : [];
-            if (fb.balls <= 0 && !(fb.dismissals > 0)) d.used_batsmen = d.used_batsmen.filter(function(x) { return x !== fromName; });
-            if (d.used_batsmen.indexOf(toName) === -1) d.used_batsmen.push(toName);
+            var ok = window.correctPlayer(d, 'bat', fromName, toName, function(b) { return Math.ceil((parseInt(b.over, 10) || 1) / 2) === pairNo && b.striker === fromName; });
+            if (ok) window.refreshCrease(d);
+            return ok;
         };
 
         window.currentBattingSide = function(d) {
@@ -5823,7 +5871,7 @@ window.shareLiveMatchLink = function() {
                 var squad = getActivePlayingSquad(side.bowlName, matchData, !side.isA);
                 window.openPlayerPicker('Who actually bowled Over ' + o + '?', squad, from, function(nv) {
                     var d2 = JSON.parse(JSON.stringify(matchData));
-                    window.retagPastOverBowler(d2, o, from, nv);
+                    if (!window.retagPastOverBowler(d2, o, from, nv)) return;
                     syncMatchState(d2);
                     alert('Over ' + o + ' now shows ' + nv + ' as the bowler.');
                 });
@@ -5854,7 +5902,7 @@ window.shareLiveMatchLink = function() {
                     var options = squad.filter(function(x) { return atCrease.indexOf(x) === -1; });
                     window.openPlayerPicker('Who actually batted in Pair ' + p + '?', options, from, function(nv) {
                         var d2 = JSON.parse(JSON.stringify(matchData));
-                        window.retagPastPairBatter(d2, p, from, nv);
+                        if (!window.retagPastPairBatter(d2, p, from, nv)) return;
                         syncMatchState(d2);
                         alert('Pair ' + p + ' now shows ' + nv + ' as the batter.');
                     });
