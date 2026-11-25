@@ -1444,13 +1444,13 @@
             { id: "FZ_ICL_SS_13", matchNo: "Super Six SS13", date: "25 Nov 2026", time: "6.20PM", team1: "Operation Stars", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
             { id: "FZ_ICL_SS_14", matchNo: "Super Six SS14", date: "25 Nov 2026", time: "7.00PM", team1: "MSD Engineering Warriors", team2: "Titans", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
             { id: "FZ_ICL_SS_15", matchNo: "Super Six SS15", date: "25 Nov 2026", time: "7.40PM", team1: "Commercial Renegades", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
-            { id: "FZ_ICL_SS_SF1", matchNo: "Championship Semi-Final 1", date: "26 Nov 2026", time: "4.30PM", team1: "Commercial Renegades", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
-            { id: "FZ_ICL_SS_SF2", matchNo: "Championship Semi-Final 2", date: "26 Nov 2026", time: "5.25PM", team1: "Operation Stars", team2: "Flying Legends", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
-            { id: "FZ_ICL_SS_FINAL", matchNo: "Championship Final", date: "26 Nov 2026", time: "6.45PM", team1: "Winner of Semi-Final 1", team2: "Winner of Semi-Final 2", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_SF1", strictId: true, matchNo: "Championship Semi-Final 1", date: "26 Nov 2026", time: "4.30PM", team1: "Commercial Renegades", team2: "Oceans XI", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_SF2", strictId: true, matchNo: "Championship Semi-Final 2", date: "26 Nov 2026", time: "5.25PM", team1: "Operation Stars", team2: "Flying Legends", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
+            { id: "FZ_ICL_SS_FINAL", strictId: true, matchNo: "Championship Final", date: "26 Nov 2026", time: "6.45PM", team1: "Winner of Semi-Final 1", team2: "Winner of Semi-Final 2", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_SS", status: "Scheduled" },
             { id: "FZ_ICL_PLATE_1", matchNo: "Plate QF1 (winner to Final)", date: "21 Nov 2026", time: "7.00AM", team1: "Sky XI", team2: "BMD Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
             { id: "FZ_ICL_PLATE_2", matchNo: "Plate QF2 (winner plays Airport Chargers)", date: "21 Nov 2026", time: "7.40AM", team1: "Banana Blasters", team2: "Airport Challengers", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
             { id: "FZ_ICL_PLATE_3", matchNo: "Plate Semi-Final", date: "21 Nov 2026", time: "8.30AM", team1: "Airport Chargers", team2: "Banana Blasters", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
-            { id: "FZ_ICL_PLATE_4", matchNo: "Plate Cup Final", date: "26 Nov 2026", time: "7.30PM", team1: "Banana Blasters", team2: "BMD Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
+            { id: "FZ_ICL_PLATE_4", strictId: true, matchNo: "Plate Cup Final", date: "26 Nov 2026", time: "7.30PM", team1: "Banana Blasters", team2: "BMD Warriors", venue: "FZC Cricket Court", pitch: "pitch_1", format: "pairs", tournament: "FZ_ICL_PLATE", status: "Scheduled" },
         ];
 
         var uploadedTeams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
@@ -2260,6 +2260,7 @@
                 match_in_progress: true,
                 match_status: "in_progress",
                 tournament: tournament,
+                fixtureId: window.pendingFixtureId || null,
                 rulesFormat: rulesFormat,
                 totalOvers: totalOvers,
                 playersPerTeam: playersPerTeam,
@@ -2318,6 +2319,7 @@
             newMatch.inn1_scorecard.batters[nsName] = { runs: 0, balls: 0, fours: 0, sixes: 0, dismissals: 0 };
             newMatch.inn1_scorecard.bowlers[bName] = { balls: 0, runs: 0, maidens: 0, wkts: 0 };
 
+            window.pendingFixtureId = null;
             document.getElementById('scorecardModal').classList.remove('viewed');
             window.navigateView('viewScorer');
             syncMatchState(newMatch);
@@ -4093,16 +4095,13 @@
         // Works out each fixture's status from the match archive: played, aborted, or upcoming
         window.fixtureStatus = function(f, archive) {
             var key = [f.team1, f.team2].sort().join('||');
-            // Archived matches do not store their fixture, so a record only counts if it was played on or after this fixture's date.
-            // Otherwise an earlier meeting of the same two teams (e.g. a Super Six match) would mark a later fixture as played.
-            var fixDay = Date.parse(f.date || '');
             var recs = archive.filter(function(m) {
                 if (!m.tA || !m.tB) return false;
+                // Knockout fixtures are matched only to a record created from that fixture (strictId).
+                // Otherwise an earlier meeting of the same two teams would mark them as played.
+                if (f.strictId) return m.fixtureId === f.id;
                 var mk = [m.tA.name, m.tB.name].sort().join('||');
-                if (!(mk === key && window.normTourney(m.tournament) === window.normTourney(f.tournament))) return false;
-                var played = window.archiveTime(m);
-                if (!isNaN(fixDay) && played && played < fixDay) return false;
-                return true;
+                return mk === key && window.normTourney(m.tournament) === window.normTourney(f.tournament);
             }).sort(function(a, b) { return String(b.timestamp || '') < String(a.timestamp || '') ? -1 : 1; });
             var done = recs.filter(function(m) { return String(m.match_status || '').toLowerCase() === 'completed'; });
             if (done.length) return { status: 'played', result: done[0].winner || '' };
@@ -4193,7 +4192,7 @@
                         '<button class="btn btn-red" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.removeAbortedFixture(\'' + f.id + '\')">🗑️ REMOVE FROM FIXTURES</button></div>';
                 }
                 return '<div class="fixture-card">' + head + title +
-                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\')">⚡ LOAD FIXTURE INTO SCORER</button></div>';
+                    '<button class="btn btn-blue" style="width:100%; padding:8px; font-size:0.76rem;" onclick="window.launchScheduledFixture(\'' + f.team1 + '\', \'' + f.team2 + '\', \'' + (f.format || 'pairs') + '\', \'' + (f.pitch || 'pitch_1') + '\', \'' + (f.tournament || 'FZ_ICL_2026') + '\', \'' + f.id + '\')">⚡ LOAD FIXTURE INTO SCORER</button></div>';
             };
 
             var section = function(title, items, mode) {
@@ -4207,7 +4206,8 @@
                 section('ABORTED', groups.aborted, 'aborted');
         }
 
-        window.launchScheduledFixture = function(t1, t2, fmt, pitch, tourney) {
+        window.launchScheduledFixture = function(t1, t2, fmt, pitch, tourney, fixtureId) {
+            window.pendingFixtureId = fixtureId || null;
             if (pitch) attachMatchListener(pitch);
             window.setupTournamentDropdowns();
             if (tourney && document.getElementById('selectTournament')) {
@@ -4392,66 +4392,105 @@
         };
 
 // One-time repair of archived matches scored before the wide/no-ball rule changed.
-// Runs hit off a wide belong to the batter (not extras); boundaries off a no-ball count for the batter.
-// Team totals and bowler figures are unchanged. Each repaired record is flagged so it is never applied twice.
+// Rule: runs hit off a wide or no-ball belong to the batter; they are not extras (wide), and boundaries count for the batter.
+// Each innings is repaired only if its scorecard reconciles with the team score both before and after
+// (batter runs + extras = team total). Team totals and bowler figures are never changed.
+// Each repaired innings is flagged so it is never applied twice.
 window.repairArchiveExtras = function() {
     if (!window.isSuperUser()) return alert("Only the tournament superusers can run this repair.");
     var statusEl = document.getElementById('adminStatus');
     var setStatus = function(msg) { if (statusEl) statusEl.innerText = msg; };
+    var innOf = function(e) { return e.inn === 2 ? 2 : 1; };
+    var wdOf = function(ev) { return ev.indexOf('Wd+') === 0 ? (parseInt(ev.split('+')[1], 10) || 0) : 0; };
+    var nbOf = function(ev) { return ev.indexOf('N+') === 0 ? (parseInt(ev.split('+')[1], 10) || 0) : 0; };
+
+    var repairInnings = function(card, evs, total) {
+        if (isNaN(total)) return null;
+        var gapOf = function(c) {
+            var bat = 0;
+            Object.keys(c.batters || {}).forEach(function(k) { bat += Number((c.batters[k] || {}).runs) || 0; });
+            return total - (bat + (Number(c.extras) || 0));
+        };
+        var before = gapOf(card);
+        var nbSum = 0;
+        evs.forEach(function(e) { nbSum += nbOf(e.event); });
+        var nbCredit;
+        if (before === 0) nbCredit = false;               // no-ball runs already in batter figures
+        else if (nbSum > 0 && before === nbSum) nbCredit = true;  // they were left out: credit them now
+        else return null;                                  // does not reconcile: leave this innings alone
+
+        var work = JSON.parse(JSON.stringify(card));
+        var st = { wides: 0, wideRuns: 0, nbRunsCredited: 0, boundaries: 0 };
+        for (var i = 0; i < evs.length; i++) {
+            var e = evs[i];
+            var wd = wdOf(e.event), nb = nbOf(e.event);
+            if (!wd && !nb) continue;
+            var n = wd || nb;
+            var bat = work.batters[e.striker || e.batter];
+            if (!bat) return null;
+            if (wd) {
+                bat.runs = (Number(bat.runs) || 0) + n;
+                work.extras = (Number(work.extras) || 0) - n;
+                st.wides++; st.wideRuns += n;
+            } else if (nbCredit) {
+                bat.runs = (Number(bat.runs) || 0) + n;
+                st.nbRunsCredited += n;
+            }
+            if (n === 4) { bat.fours = (Number(bat.fours) || 0) + 1; st.boundaries++; }
+            if (n === 6) { bat.sixes = (Number(bat.sixes) || 0) + 1; st.boundaries++; }
+        }
+        if (gapOf(work) !== 0) return null;
+        return { card: work, st: st };
+    };
+
     setStatus("Checking archived matches...");
     db.collection("match_history").get().then(function(snap) {
         var plans = [];
-        var totalWides = 0, totalNbBoundaries = 0, skippedNoTimeline = 0, skippedMissingBatter = 0, alreadyDone = 0;
+        var sum = { matches: 0, wides: 0, wideRuns: 0, nbRunsCredited: 0, boundaries: 0, inningsSkipped: 0, noLog: 0 };
         snap.forEach(function(docSnap) {
             var x = docSnap.data();
             if (x.reset_marker) return;
-            if (x.extras_repair_v2) { alreadyDone++; return; }
             var tl = Array.isArray(x.ball_timeline) ? x.ball_timeline : [];
-            if (tl.length === 0) { skippedNoTimeline++; return; }
-            var cards = { 1: x.inn1_scorecard, 2: x.inn2_scorecard };
-            var wides = 0, nbB = 0;
-            tl.forEach(function(e) {
-                if (!e || typeof e.event !== 'string') return;
-                var isWd = e.event.indexOf('Wd+') === 0;
-                var isNb = e.event.indexOf('N+') === 0;
-                if (!isWd && !isNb) return;
-                var n = parseInt(e.event.split('+')[1], 10);
-                if (!(n > 0)) return;
-                var card = cards[e.inn === 2 ? 2 : 1];
-                var name = e.striker || e.batter;
-                var bat = card && card.batters ? card.batters[name] : null;
-                if (!bat) { skippedMissingBatter++; return; }
-                if (isWd) {
-                    bat.runs = (bat.runs || 0) + n;
-                    card.extras = (card.extras || 0) - n;
-                    if (n === 4) bat.fours = (bat.fours || 0) + 1;
-                    if (n === 6) bat.sixes = (bat.sixes || 0) + 1;
-                    wides++;
-                } else {
-                    if (n === 4) { bat.fours = (bat.fours || 0) + 1; nbB++; }
-                    if (n === 6) { bat.sixes = (bat.sixes || 0) + 1; nbB++; }
-                }
+            if (tl.length === 0) { sum.noLog++; return; }
+            var isA = (x.tossWinner === 'tA') ? (x.tossDecision === 'bat') : (x.tossDecision === 'bowl');
+            var batTeam = { 1: isA ? 'tA' : 'tB', 2: isA ? 'tB' : 'tA' };
+            var data = {};
+            var touched = false;
+            [1, 2].forEach(function(inn) {
+                var flag = 'extras_repair_inn' + inn;
+                if (x[flag]) return;
+                var card = x[inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard'];
+                var team = x[batTeam[inn]];
+                if (!card || !card.batters || !team) return;
+                var evs = tl.filter(function(e) { return e && typeof e.event === 'string' && innOf(e) === inn; });
+                var hasWork = evs.some(function(e) { return wdOf(e.event) > 0 || nbOf(e.event) > 0; });
+                if (!hasWork) return;
+                var res = repairInnings(card, evs, Number(team.score));
+                if (!res) { sum.inningsSkipped++; return; }
+                data[inn === 1 ? 'inn1_scorecard' : 'inn2_scorecard'] = res.card;
+                data[flag] = true;
+                sum.wides += res.st.wides; sum.wideRuns += res.st.wideRuns;
+                sum.nbRunsCredited += res.st.nbRunsCredited; sum.boundaries += res.st.boundaries;
+                touched = true;
             });
-            if (wides === 0 && nbB === 0) return;
-            totalWides += wides;
-            totalNbBoundaries += nbB;
-            plans.push({ ref: docSnap.ref, sc1: x.inn1_scorecard, sc2: x.inn2_scorecard, label: (x.teamA || '') + ' v ' + (x.teamB || '') });
+            if (touched) { sum.matches++; plans.push({ ref: docSnap.ref, data: data }); }
         });
 
         if (plans.length === 0) {
             setStatus("No archived matches need repair.");
-            return alert("No archived matches need repair." + (alreadyDone ? "\n(" + alreadyDone + " already repaired.)" : ""));
+            return alert("No archived matches need repair." +
+                (sum.inningsSkipped ? "\n" + sum.inningsSkipped + " innings do not reconcile and were left alone." : ""));
         }
-        var msg = "Repair " + plans.length + " archived match(es)?\n\n" +
-            "Runs off wides moved from extras to the batter: " + totalWides + " wide(s).\n" +
-            "Boundaries off no-balls credited to the batter: " + totalNbBoundaries + ".\n\n" +
-            "Team totals and bowler figures do not change." +
-            (skippedNoTimeline ? "\nSkipped " + skippedNoTimeline + " older record(s) with no ball log." : "") +
-            (skippedMissingBatter ? "\nSkipped " + skippedMissingBatter + " ball(s) with no matching batter row." : "") +
-            "\n\nThis writes to the archive and cannot be undone automatically.";
+        var msg = "Repair " + sum.matches + " archived match(es)?\n\n" +
+            "Wides: " + sum.wides + " wide(s); " + sum.wideRuns + " run(s) moved from extras to batters.\n" +
+            "No-balls: " + sum.nbRunsCredited + " run(s) credited to batters where they were missing.\n" +
+            "Boundaries (4s/6s) added to batters: " + sum.boundaries + ".\n" +
+            (sum.inningsSkipped ? "\n" + sum.inningsSkipped + " innings do not reconcile with the team score and will be left alone.\n" : "") +
+            (sum.noLog ? sum.noLog + " older record(s) have no ball log and are not touched.\n" : "") +
+            "\nTeam totals and bowler figures do not change. This writes to the archive and cannot be undone automatically.";
         if (!confirm(msg)) { setStatus("Repair cancelled."); return; }
 
-        setStatus("Repairing " + plans.length + " match(es)...");
+        setStatus("Repairing " + sum.matches + " match(es)...");
         var stamp = new Date().toISOString();
         var chunks = [];
         for (var i = 0; i < plans.length; i += 400) chunks.push(plans.slice(i, i + 400));
@@ -4460,20 +4499,18 @@ window.repairArchiveExtras = function() {
             chain = chain.then(function() {
                 var batch = db.batch();
                 chunk.forEach(function(p) {
-                    var data = { extras_repair_v2: true, extras_repair_at: stamp };
-                    if (p.sc1) data.inn1_scorecard = p.sc1;
-                    if (p.sc2) data.inn2_scorecard = p.sc2;
-                    batch.set(p.ref, data, { merge: true });
+                    p.data.extras_repair_at = stamp;
+                    batch.set(p.ref, p.data, { merge: true });
                 });
                 return batch.commit();
             });
         });
         chain.then(function() {
-            setStatus("Repair complete: " + plans.length + " match(es) updated.");
-            alert("✅ Repair complete. " + plans.length + " archived match(es) updated.");
+            setStatus("Repair complete: " + sum.matches + " match(es) updated.");
+            alert("✅ Repair complete. " + sum.matches + " archived match(es) updated.");
             window.refreshAdminStatus();
         }).catch(function(e) {
-            setStatus("Repair stopped: " + (e && e.message ? e.message : e) + ". Run it again; repaired records are skipped.");
+            setStatus("Repair stopped: " + (e && e.message ? e.message : e) + ". Run it again; repaired innings are skipped.");
             alert("Repair stopped: " + (e && e.message ? e.message : e));
         });
     }).catch(function(e) {
