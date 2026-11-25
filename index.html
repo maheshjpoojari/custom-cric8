@@ -4093,10 +4093,16 @@
         // Works out each fixture's status from the match archive: played, aborted, or upcoming
         window.fixtureStatus = function(f, archive) {
             var key = [f.team1, f.team2].sort().join('||');
+            // Archived matches do not store their fixture, so a record only counts if it was played on or after this fixture's date.
+            // Otherwise an earlier meeting of the same two teams (e.g. a Super Six match) would mark a later fixture as played.
+            var fixDay = Date.parse(f.date || '');
             var recs = archive.filter(function(m) {
                 if (!m.tA || !m.tB) return false;
                 var mk = [m.tA.name, m.tB.name].sort().join('||');
-                return mk === key && window.normTourney(m.tournament) === window.normTourney(f.tournament);
+                if (!(mk === key && window.normTourney(m.tournament) === window.normTourney(f.tournament))) return false;
+                var played = window.archiveTime(m);
+                if (!isNaN(fixDay) && played && played < fixDay) return false;
+                return true;
             }).sort(function(a, b) { return String(b.timestamp || '') < String(a.timestamp || '') ? -1 : 1; });
             var done = recs.filter(function(m) { return String(m.match_status || '').toLowerCase() === 'completed'; });
             if (done.length) return { status: 'played', result: done[0].winner || '' };
