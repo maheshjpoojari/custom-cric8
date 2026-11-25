@@ -4094,15 +4094,22 @@
             return { status: 'upcoming', result: '' };
         };
 
+        window.fixturePairKey = function(f) { return [f.team1, f.team2].sort().join('||'); };
+
         window.renderScheduledFixtures = function() {
             var box = document.getElementById('fixturesListContainer');
             if (!box) return;
             Promise.all([db.collection("fixtures").get(), db.collection("match_history").get()]).then(function(res) {
                 var byId = {};
                 DEFAULT_ICL_FIXTURES.forEach(function(f) { byId[f.id] = f; });
+                var scheduleIds = {}, schedulePairs = {};
+                DEFAULT_ICL_FIXTURES.forEach(function(f) { scheduleIds[f.id] = true; schedulePairs[window.fixturePairKey(f)] = true; });
                 res[0].forEach(function(docSnap) {
                     var data = docSnap.data();
-                    byId[data.id || docSnap.id] = Object.assign({}, byId[data.id || docSnap.id] || {}, data);
+                    var id = data.id || docSnap.id;
+                    // A copy added by hand for two teams already on the schedule is a duplicate: hide it
+                    if (!scheduleIds[id] && data.matchNo === undefined && !data.removed && schedulePairs[window.fixturePairKey(data)]) return;
+                    byId[id] = Object.assign({}, byId[id] || {}, data);
                 });
                 scheduledFixturesList = Object.keys(byId).map(function(k) { return byId[k]; });
                 var archive = [];
